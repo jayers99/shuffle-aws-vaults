@@ -305,6 +305,8 @@ class CopyService:
                             )
 
             except Exception as e:
+                error_msg = f"Failed to copy recovery point {operation.source_recovery_point_arn}: {e}"
+                logger.error(error_msg, exc_info=True)
                 operation.fail(str(e))
                 if progress_callback:
                     progress_callback(
@@ -448,6 +450,8 @@ class CopyService:
                                 )
 
             except Exception as e:
+                error_msg = f"Failed to copy recovery point {operation.source_recovery_point_arn}: {e}"
+                logger.error(error_msg, exc_info=True)
                 operation.fail(str(e))
                 with completed_lock:
                     completed_count += 1

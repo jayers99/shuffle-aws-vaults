@@ -129,9 +129,10 @@ class AWSBackupRepository:
         Returns:
             Created Vault domain object
         """
-        client = self._get_backup_client(region)
 
-        try:
+        @self._credential_manager.with_retry
+        def _create_vault_impl() -> Vault:
+            client = self._get_backup_client(region)
             params = {"BackupVaultName": vault_name}
             if encryption_key_arn:
                 params["EncryptionKeyArn"] = encryption_key_arn
@@ -145,11 +146,15 @@ class AWSBackupRepository:
                 account_id=self.account_id,
                 encryption_key_arn=encryption_key_arn,
             )
+
+        try:
+            return _create_vault_impl()
         except ClientError as e:
             # Vault already exists is not an error - return existing vault info
             if e.response["Error"]["Code"] == "AlreadyExistsException":
                 # Get vault details
                 try:
+                    client = self._get_backup_client(region)
                     desc_response = client.describe_backup_vault(BackupVaultName=vault_name)
                     return Vault(
                         name=vault_name,
@@ -173,10 +178,12 @@ class AWSBackupRepository:
         Returns:
             List of RecoveryPoint domain objects
         """
-        client = self._get_backup_client(region)
-        recovery_points = []
 
-        try:
+        @self._credential_manager.with_retry
+        def _list_recovery_points_impl() -> list[RecoveryPoint]:
+            client = self._get_backup_client(region)
+            recovery_points = []
+
             paginator = client.get_paginator("list_recovery_points_by_backup_vault")
             for page in paginator.paginate(BackupVaultName=vault_name):
                 for rp_data in page.get("RecoveryPoints", []):
@@ -192,12 +199,15 @@ class AWSBackupRepository:
                         backup_job_id=rp_data.get("BackupJobId", ""),
                     )
                     recovery_points.append(recovery_point)
+
+            return recovery_points
+
+        try:
+            return _list_recovery_points_impl()
         except ClientError as e:
             raise RuntimeError(
                 f"Failed to list recovery points in vault {vault_name}: {e}"
             ) from e
-
-        return recovery_points
 
     def start_copy_job(
         self,
@@ -271,10 +281,10 @@ class AWSBackupRepository:
             Dict with min_retention_days, max_retention_days, and locked status,
             or None if no lock configuration exists
         """
-        client = self._get_backup_client(region)
 
-        # Get vault lock configuration from describe_backup_vault
-        try:
+        @self._credential_manager.with_retry
+        def _get_vault_lock_impl() -> dict[str, int | bool] | None:
+            client = self._get_backup_client(region)
             response = client.describe_backup_vault(BackupVaultName=vault_name)
             if "MinRetentionDays" in response or "MaxRetentionDays" in response:
                 return {
@@ -282,10 +292,12 @@ class AWSBackupRepository:
                     "max_retention_days": response.get("MaxRetentionDays"),
                     "locked": response.get("Locked", False),
                 }
-        except ClientError:
-            pass
+            return None
 
-        return None
+        try:
+            return _get_vault_lock_impl()
+        except ClientError:
+            return None
 
     def put_vault_lock_configuration(
         self,
@@ -302,9 +314,10 @@ class AWSBackupRepository:
             min_retention_days: Minimum retention days
             max_retention_days: Maximum retention days
         """
-        client = self._get_backup_client(region)
 
-        try:
+        @self._credential_manager.with_retry
+        def _put_vault_lock_impl() -> None:
+            client = self._get_backup_client(region)
             params = {"BackupVaultName": vault_name}
             if min_retention_days is not None:
                 params["MinRetentionDays"] = min_retention_days
@@ -312,6 +325,9 @@ class AWSBackupRepository:
                 params["MaxRetentionDays"] = max_retention_days
 
             client.put_backup_vault_lock_configuration(**params)
+
+        try:
+            _put_vault_lock_impl()
         except ClientError as e:
             raise RuntimeError(
                 f"Failed to set vault lock configuration for {vault_name}: {e}"

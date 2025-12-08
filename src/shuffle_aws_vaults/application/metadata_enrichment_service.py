@@ -5,6 +5,7 @@ Service for enriching recovery points with external metadata.
 Joins recovery points with CSV metadata by resourceArn.
 """
 
+import logging
 from dataclasses import replace
 from typing import Protocol
 
@@ -12,6 +13,8 @@ from shuffle_aws_vaults.domain.recovery_point import RecoveryPoint
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
+
+logger = logging.getLogger(__name__)
 
 
 def file_info() -> dict[str, str]:
@@ -60,6 +63,10 @@ class MetadataEnrichmentService:
         metadata = self.metadata_repo.get_metadata_for_resource(recovery_point.resource_arn)
 
         if metadata is None:
+            logger.warning(
+                f"No metadata found for resource ARN: {recovery_point.resource_arn} "
+                f"(recovery point: {recovery_point.recovery_point_arn})"
+            )
             return recovery_point
 
         # Create new RecoveryPoint with enriched metadata (immutable)
