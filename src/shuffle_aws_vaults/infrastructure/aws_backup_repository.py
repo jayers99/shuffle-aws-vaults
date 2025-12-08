@@ -13,6 +13,7 @@ from botocore.exceptions import ClientError
 
 from shuffle_aws_vaults.domain.recovery_point import RecoveryPoint
 from shuffle_aws_vaults.domain.vault import Vault
+from shuffle_aws_vaults.infrastructure.credential_manager import get_credential_manager
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
@@ -48,7 +49,7 @@ class AWSBackupRepository:
         """
         self.account_id = account_id
         self.role_arn = role_arn
-        self._sessions: dict[str, boto3.Session] = {}
+        self._credential_manager = get_credential_manager()
 
     def _get_session(self, region: str) -> boto3.Session:
         """Get or create a boto3 session for a region.
@@ -57,26 +58,16 @@ class AWSBackupRepository:
             region: AWS region
 
         Returns:
-            boto3 Session
+            boto3 Session with credential refresh support
         """
-        if region not in self._sessions:
-            if self.role_arn:
-                sts = boto3.client("sts")
-                response = sts.assume_role(
-                    RoleArn=self.role_arn,
-                    RoleSessionName=f"shuffle-aws-vaults-{self.account_id}",
-                )
-                credentials = response["Credentials"]
-                self._sessions[region] = boto3.Session(
-                    aws_access_key_id=credentials["AccessKeyId"],
-                    aws_secret_access_key=credentials["SecretAccessKey"],
-                    aws_session_token=credentials["SessionToken"],
-                    region_name=region,
-                )
-            else:
-                self._sessions[region] = boto3.Session(region_name=region)
+        # Use credential manager for session handling
+        # Note: Role assumption is not yet supported with credential manager
+        if self.role_arn:
+            raise NotImplementedError(
+                "Role assumption not yet supported with credential manager"
+            )
 
-        return self._sessions[region]
+        return self._credential_manager.get_session(region)
 
     def _get_backup_client(self, region: str) -> Any:
         """Get boto3 backup client for a region.
@@ -99,10 +90,12 @@ class AWSBackupRepository:
         Returns:
             List of Vault domain objects
         """
-        client = self._get_backup_client(region)
-        vaults = []
 
-        try:
+        @self._credential_manager.with_retry
+        def _list_vaults_impl() -> list[Vault]:
+            client = self._get_backup_client(region)
+            vaults = []
+
             paginator = client.get_paginator("list_backup_vaults")
             for page in paginator.paginate():
                 for vault_data in page.get("BackupVaultList", []):
@@ -115,10 +108,13 @@ class AWSBackupRepository:
                         encryption_key_arn=vault_data.get("EncryptionKeyArn"),
                     )
                     vaults.append(vault)
+
+            return vaults
+
+        try:
+            return _list_vaults_impl()
         except ClientError as e:
             raise RuntimeError(f"Failed to list vaults in {region}: {e}") from e
-
-        return vaults
 
     def create_vault(
         self, vault_name: str, region: str, encryption_key_arn: str | None = None
@@ -223,9 +219,10 @@ class AWSBackupRepository:
         Returns:
             Copy job ID
         """
-        client = self._get_backup_client(region)
 
-        try:
+        @self._credential_manager.with_retry
+        def _start_copy_job_impl() -> str:
+            client = self._get_backup_client(region)
             response = client.start_copy_job(
                 RecoveryPointArn=source_recovery_point_arn,
                 SourceBackupVaultName=source_vault_name,
@@ -233,6 +230,9 @@ class AWSBackupRepository:
                 IamRoleArn=f"arn:aws:iam::{self.account_id}:role/service-role/AWSBackupDefaultServiceRole",
             )
             return response["CopyJobId"]
+
+        try:
+            return _start_copy_job_impl()
         except ClientError as e:
             raise RuntimeError(f"Failed to start copy job: {e}") from e
 
@@ -246,11 +246,15 @@ class AWSBackupRepository:
         Returns:
             Job status (CREATED, RUNNING, COMPLETED, FAILED)
         """
-        client = self._get_backup_client(region)
 
-        try:
+        @self._credential_manager.with_retry
+        def _get_copy_job_status_impl() -> str:
+            client = self._get_backup_client(region)
             response = client.describe_copy_job(CopyJobId=copy_job_id)
             return response["CopyJob"]["State"]
+
+        try:
+            return _get_copy_job_status_impl()
         except ClientError as e:
             raise RuntimeError(f"Failed to get copy job status: {e}") from e
 
