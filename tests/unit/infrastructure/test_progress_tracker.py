@@ -275,3 +275,89 @@ def test_rolling_window() -> None:
 
     # Should only keep 5 (window_size)
     assert len(tracker.snapshots) == 5
+
+
+def test_runtime_limit_not_exceeded() -> None:
+    """Test that runtime limit is not exceeded initially."""
+    tracker = ProgressTracker(total=100, max_runtime_minutes=5)
+
+    assert not tracker.is_runtime_limit_exceeded()
+
+
+def test_runtime_limit_exceeded() -> None:
+    """Test that runtime limit is exceeded after time passes."""
+    tracker = ProgressTracker(total=100, max_runtime_minutes=1)
+
+    # Simulate 61 seconds passing by adjusting start_time
+    tracker.start_time = time.time() - 61
+
+    assert tracker.is_runtime_limit_exceeded()
+
+
+def test_runtime_limit_no_limit_set() -> None:
+    """Test runtime limit behavior when no limit is set."""
+    tracker = ProgressTracker(total=100)
+
+    assert not tracker.is_runtime_limit_exceeded()
+    assert tracker.get_time_remaining_in_window() is None
+
+
+def test_get_time_remaining_in_window() -> None:
+    """Test time remaining calculation."""
+    tracker = ProgressTracker(total=100, max_runtime_minutes=10)
+
+    # Should have close to 10 minutes (600 seconds) remaining
+    time_remaining = tracker.get_time_remaining_in_window()
+    assert time_remaining is not None
+    assert 595 < time_remaining <= 600  # Allow small tolerance
+
+    # Simulate 5 minutes passing
+    tracker.start_time = time.time() - 300
+
+    time_remaining = tracker.get_time_remaining_in_window()
+    assert time_remaining is not None
+    assert 295 < time_remaining <= 300
+
+
+def test_get_time_remaining_never_negative() -> None:
+    """Test that time remaining never goes negative."""
+    tracker = ProgressTracker(total=100, max_runtime_minutes=1)
+
+    # Simulate 2 minutes passing (limit exceeded)
+    tracker.start_time = time.time() - 120
+
+    time_remaining = tracker.get_time_remaining_in_window()
+    assert time_remaining is not None
+    assert time_remaining == 0
+
+
+def test_progress_line_with_runtime_limit() -> None:
+    """Test that progress line includes runtime window when limit is set."""
+    tracker = ProgressTracker(total=100, max_runtime_minutes=10)
+    tracker.completed = 50
+
+    # Add some throughput data
+    now = time.time()
+    tracker.snapshots.clear()
+    tracker.snapshots.append(
+        ProgressSnapshot(timestamp=now - 10, completed=0, total=100, errors=0)
+    )
+    tracker.snapshots.append(
+        ProgressSnapshot(timestamp=now, completed=50, total=100, errors=0)
+    )
+
+    line = tracker._format_progress_line()
+
+    assert "50/100" in line
+    assert "Window:" in line  # Runtime window should be shown
+
+
+def test_progress_line_without_runtime_limit() -> None:
+    """Test that progress line doesn't show window when no limit is set."""
+    tracker = ProgressTracker(total=100)
+    tracker.completed = 50
+
+    line = tracker._format_progress_line()
+
+    assert "50/100" in line
+    assert "Window:" not in line  # No runtime window

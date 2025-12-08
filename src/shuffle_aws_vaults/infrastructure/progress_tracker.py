@@ -66,6 +66,7 @@ class ProgressTracker:
         refresh_interval: float = 5.0,
         window_size: int = 10,
         verbose: bool = False,
+        max_runtime_minutes: int | None = None,
     ) -> None:
         """Initialize progress tracker.
 
@@ -75,12 +76,14 @@ class ProgressTracker:
             refresh_interval: Seconds between progress updates (default: 5.0)
             window_size: Number of snapshots for rolling average (default: 10)
             verbose: Enable verbose per-item logging (default: False)
+            max_runtime_minutes: Maximum runtime in minutes (optional)
         """
         self.total = total
         self.output = output
         self.refresh_interval = refresh_interval
         self.window_size = window_size
         self.verbose = verbose
+        self.max_runtime_minutes = max_runtime_minutes
 
         self.completed = 0
         self.errors = 0
@@ -206,6 +209,33 @@ class ProgressTracker:
 
         return timedelta(seconds=seconds_remaining)
 
+    def is_runtime_limit_exceeded(self) -> bool:
+        """Check if runtime limit has been exceeded.
+
+        Returns:
+            True if runtime limit is set and exceeded, False otherwise
+        """
+        if not self.max_runtime_minutes:
+            return False
+
+        elapsed_minutes = (time.time() - self.start_time) / 60
+        return elapsed_minutes >= self.max_runtime_minutes
+
+    def get_time_remaining_in_window(self) -> float | None:
+        """Get time remaining in runtime window.
+
+        Returns:
+            Seconds remaining, or None if no runtime limit set
+        """
+        if not self.max_runtime_minutes:
+            return None
+
+        elapsed_seconds = time.time() - self.start_time
+        max_runtime_seconds = self.max_runtime_minutes * 60
+        remaining = max_runtime_seconds - elapsed_seconds
+
+        return max(0, remaining)  # Never return negative
+
     def _format_duration(self, seconds: float) -> str:
         """Format duration in human-readable format.
 
@@ -262,6 +292,10 @@ class ProgressTracker:
         eta = self._calculate_eta()
         eta_str = f"ETA: {self._format_duration(eta.total_seconds())}" if eta else "ETA: calculating..."
 
+        # Time remaining in runtime window (if limit set)
+        time_remaining = self.get_time_remaining_in_window()
+        window_str = f"Window: {self._format_duration(time_remaining)}" if time_remaining is not None else None
+
         # Errors
         error_str = f"errors: {self.errors}" if self.errors > 0 else ""
 
@@ -272,6 +306,9 @@ class ProgressTracker:
             eta_str,
             f"Elapsed: {elapsed_str}",
         ]
+
+        if window_str:
+            parts.append(window_str)
 
         if error_str:
             parts.append(error_str)
