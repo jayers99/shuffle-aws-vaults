@@ -117,7 +117,7 @@ class CSVMetadataRepository:
                 rows_with_data += 1
 
                 # Store all non-empty fields from CSV row
-                # Build dict incrementally to avoid storing entire row in memory
+                # Filter empty fields to reduce memory footprint
                 metadata[resource_arn] = {k: v for k, v in row.items() if v}
 
         self._total_rows = rows_with_data
@@ -128,8 +128,8 @@ class CSVMetadataRepository:
             f"from {rows_processed:,} total rows"
         )
 
-        # Final progress callback
-        if self._progress_callback:
+        # Final progress callback (only if we didn't just report this number)
+        if self._progress_callback and (rows_processed % self.PROGRESS_INTERVAL != 0):
             self._progress_callback(rows_processed)
 
         return metadata

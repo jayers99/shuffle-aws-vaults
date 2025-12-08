@@ -2,7 +2,6 @@
 
 import time
 from pathlib import Path
-from unittest.mock import Mock
 
 import pytest
 
@@ -230,7 +229,7 @@ def test_large_csv_performance_benchmark(tmp_path: Path) -> None:
     """Benchmark test: loading 100K rows should be fast.
 
     Note: Full 1M row benchmark would be too slow for regular test runs.
-    This tests 100K rows which should complete in < 1 second.
+    This tests 100K rows which should complete in < 2 seconds.
     """
     # Arrange
     csv_file = tmp_path / "large_metadata.csv"
