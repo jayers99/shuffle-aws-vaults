@@ -81,3 +81,44 @@ def test_recovery_point_immutability(sample_recovery_point: RecoveryPoint) -> No
     """Test that recovery points are immutable."""
     with pytest.raises(AttributeError):
         sample_recovery_point.status = "FAILED"  # type: ignore
+
+
+def test_recovery_point_with_metadata() -> None:
+    """Test recovery point with external metadata."""
+    rp = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-meta",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-meta",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=5 * 1024**3,
+        backup_job_id="job-meta",
+        metadata={"APMID": "APP001", "Environment": "Production"},
+    )
+
+    assert rp.get_metadata("APMID") == "APP001"
+    assert rp.get_metadata("Environment") == "Production"
+    assert rp.has_metadata("APMID") is True
+    assert rp.has_metadata("NonExistent") is False
+
+
+def test_recovery_point_metadata_default() -> None:
+    """Test recovery point without metadata uses empty dict."""
+    rp = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-no-meta",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-no-meta",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=5 * 1024**3,
+        backup_job_id="job-no-meta",
+    )
+
+    assert rp.metadata == {}
+    assert rp.get_metadata("APMID") is None
+    assert rp.get_metadata("APMID", "DEFAULT") == "DEFAULT"
+    assert rp.has_metadata("APMID") is False
