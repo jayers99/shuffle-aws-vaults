@@ -40,6 +40,7 @@ class FilterCriteria(Enum):
     MAX_SIZE_GB = "max_size_gb"
     STATUS = "status"
     VAULT_NAME_PATTERN = "vault_name_pattern"
+    APMID_IN_SET = "apmid_in_set"
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,13 @@ class FilterRule:
                     result = recovery_point.backup_vault_name.startswith(prefix)
                 else:
                     result = recovery_point.backup_vault_name == pattern
+            case FilterCriteria.APMID_IN_SET:
+                # Parse comma-separated APMID list into a set
+                allowed_apmids = {apmid.strip() for apmid in str(self.value).split(",")}
+                # Get APMID from metadata, default to None if missing
+                apmid = recovery_point.get_metadata("APMID")
+                # Match if APMID exists and is in the allowed set
+                result = apmid is not None and apmid in allowed_apmids
             case _:
                 result = False
 

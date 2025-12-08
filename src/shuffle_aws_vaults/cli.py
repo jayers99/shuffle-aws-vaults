@@ -108,14 +108,22 @@ def create_parser() -> argparse.ArgumentParser:
         help="Apply filter rules to recovery points",
     )
     filter_parser.add_argument(
-        "--config",
-        required=True,
-        help="Path to filter configuration file",
-    )
-    filter_parser.add_argument(
         "--source-account",
         required=True,
         help="Source AWS account ID",
+    )
+    filter_parser.add_argument(
+        "--vault",
+        required=True,
+        help="Vault name to filter recovery points from",
+    )
+    filter_parser.add_argument(
+        "--allowed-apmids",
+        help="Comma-separated list of allowed APMIDs (e.g., 'APP001,APP002')",
+    )
+    filter_parser.add_argument(
+        "--metadata-csv",
+        help="Path to CSV file with metadata (required if using --allowed-apmids)",
     )
 
     # copy command
@@ -301,12 +309,90 @@ def cmd_filter(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 for success)
     """
-    print(f"Applying filters from {args.config}")
-    print(f"  Source account: {args.source_account}")
+    from shuffle_aws_vaults.application.filter_service import FilterService
+    from shuffle_aws_vaults.domain.filter_rule import FilterCriteria, FilterRule, FilterRuleSet
+
+    logger = setup_logger(verbose=args.verbose)
+
+    logger.info(
+        f"Filtering recovery points from vault {args.vault} in account {args.source_account}"
+    )
+
+    # Validate that metadata-csv is provided if allowed-apmids is used
+    if args.allowed_apmids and not args.metadata_csv:
+        logger.error("--metadata-csv is required when using --allowed-apmids")
+        return 1
+
     if args.dry_run:
-        print("  [DRY RUN]")
-    # TODO: Implement actual filtering logic
-    return 0
+        logger.info("  [DRY RUN]")
+        return 0
+
+    try:
+        # Create repository and list service
+        backup_repo = AWSBackupRepository(account_id=args.source_account)
+        list_service = ListService(backup_repo, dry_run=args.dry_run)
+
+        # List recovery points from vault
+        logger.info(f"Loading recovery points from vault: {args.vault}")
+        recovery_points = list_service.list_vault_recovery_points(args.vault, args.region)
+        logger.info(f"Found {len(recovery_points)} recovery points")
+
+        # Enrich with CSV metadata if provided
+        if args.metadata_csv:
+            logger.info(f"Loading metadata from {args.metadata_csv}")
+            csv_repo = CSVMetadataRepository(args.metadata_csv)
+            enrichment_service = MetadataEnrichmentService(csv_repo)
+            recovery_points = enrichment_service.enrich_recovery_points(recovery_points)
+
+            stats = enrichment_service.get_enrichment_stats(recovery_points)
+            logger.info(
+                f"Enriched {stats['enriched_count']}/{stats['total_count']} recovery points"
+            )
+
+        # Apply filters if specified
+        if args.allowed_apmids:
+            logger.info(f"Applying APMID filter: {args.allowed_apmids}")
+            rules = FilterRuleSet(
+                rules=[
+                    FilterRule(FilterCriteria.APMID_IN_SET, args.allowed_apmids, include=True)
+                ]
+            )
+            filter_service = FilterService(rules)
+
+            # Get filter summary
+            summary = filter_service.get_filter_summary(recovery_points)
+
+            # Display summary
+            print("\nFilter Summary:")
+            print(f"  Total Recovery Points: {summary['total_count']}")
+            print(f"  Included: {summary['included_count']}")
+            print(f"  Excluded: {summary['excluded_count']}")
+            print(f"  Inclusion Rate: {summary['inclusion_rate_percent']}%")
+            print(f"  Total Size (Included): {summary['total_size_gb_included']} GB")
+            print(f"  Total Size (Excluded): {summary['total_size_gb_excluded']} GB")
+
+            # Display included recovery points if output is verbose
+            if args.verbose:
+                included, _ = filter_service.apply_filters(recovery_points)
+                print("\nIncluded Recovery Points:")
+                for rp in included:
+                    print(f"  - {rp.recovery_point_arn}")
+                    print(f"    APMID: {rp.get_metadata('APMID')}")
+                    print(f"    Resource: {rp.resource_arn}")
+                    print(f"    Size: {rp.size_gb()} GB")
+        else:
+            logger.info("No filters specified - showing all recovery points")
+            print(f"\nTotal Recovery Points: {len(recovery_points)}")
+
+        return 0
+
+    except Exception as e:
+        logger.error(f"Error filtering recovery points: {e}")
+        if args.verbose:
+            import traceback
+
+            traceback.print_exc()
+        return 1
 
 
 def cmd_copy(args: argparse.Namespace) -> int:

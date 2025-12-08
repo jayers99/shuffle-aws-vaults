@@ -61,12 +61,16 @@ def test_parser_filter_command() -> None:
     args = parser.parse_args([
         "filter",
         "--source-account", "123456789012",
-        "--config", "filter.yaml",
+        "--vault", "test-vault",
+        "--allowed-apmids", "APP001,APP002",
+        "--metadata-csv", "metadata.csv",
     ])
 
     assert args.command == "filter"
     assert args.source_account == "123456789012"
-    assert args.config == "filter.yaml"
+    assert args.vault == "test-vault"
+    assert args.allowed_apmids == "APP001,APP002"
+    assert args.metadata_csv == "metadata.csv"
 
 
 def test_parser_copy_command() -> None:
