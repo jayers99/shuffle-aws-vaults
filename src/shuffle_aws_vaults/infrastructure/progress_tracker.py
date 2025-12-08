@@ -9,7 +9,7 @@ import sys
 import time
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Callable, TextIO
 
 __version__ = "0.1.0"
@@ -52,7 +52,11 @@ class ProgressTracker:
     """Tracks progress and displays real-time updates.
 
     Calculates throughput, ETA, and displays progress to console.
-    Thread-safe for use with multithreaded operations.
+
+    Note:
+        This class is NOT thread-safe. If used in a multithreaded context,
+        external synchronization (e.g., a threading.Lock) is required to
+        prevent race conditions when updating counters.
     """
 
     def __init__(
@@ -303,9 +307,10 @@ class ProgressTracker:
         if final_message:
             self._write_line(final_message())
         else:
+            percentage = (self.completed / self.total * 100) if self.total > 0 else 0
             summary = (
                 f"\nCompleted: {self.completed}/{self.total} "
-                f"({self.completed / self.total * 100:.1f}%) "
+                f"({percentage:.1f}%) "
                 f"in {elapsed_str}"
             )
             if self.errors > 0:

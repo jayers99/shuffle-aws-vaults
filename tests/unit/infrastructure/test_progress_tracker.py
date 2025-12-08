@@ -2,7 +2,6 @@
 
 import io
 import time
-from unittest.mock import Mock, patch
 
 from shuffle_aws_vaults.infrastructure.progress_tracker import ProgressSnapshot, ProgressTracker
 
@@ -262,7 +261,8 @@ def test_rolling_window() -> None:
     """Test that rolling window limits snapshot count."""
     tracker = ProgressTracker(total=100, window_size=5)
 
-    # Add 10 snapshots
+    # Add 10 snapshots (tracker already has 1 initial snapshot)
+    # With window_size=5, deque will only keep the last 5
     for i in range(10):
         tracker.snapshots.append(
             ProgressSnapshot(

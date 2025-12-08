@@ -579,9 +579,9 @@ def cmd_copy(args: argparse.Namespace) -> int:
             # Update progress tracker counts
             progress_tracker.update(completed=current, errors=progress_tracker.errors)
 
-            # In verbose mode, log the message
+            # In verbose mode, log the message separately (don't double-increment)
             if args.verbose:
-                progress_tracker.increment_completed(message)
+                logger.info(message)
 
         # Execute copy operation
         if args.workers > 1:
