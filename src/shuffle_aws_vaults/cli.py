@@ -9,12 +9,14 @@ with filtering and progress tracking capabilities.
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from typing import NoReturn
 
 from shuffle_aws_vaults.application.list_service import ListService
 from shuffle_aws_vaults.application.metadata_enrichment_service import (
     MetadataEnrichmentService,
 )
+from shuffle_aws_vaults.domain.summary_report import FailureDetail, SummaryReport
 from shuffle_aws_vaults.infrastructure.aws_backup_repository import AWSBackupRepository
 from shuffle_aws_vaults.infrastructure.csv_metadata_repository import CSVMetadataRepository
 from shuffle_aws_vaults.infrastructure.logger import setup_logger
@@ -190,6 +192,10 @@ def create_parser() -> argparse.ArgumentParser:
         choices=range(1, 10001),
         metavar="1-10000",
         help="Maximum runtime in minutes (1-10000, exits gracefully when limit reached)",
+    )
+    copy_parser.add_argument(
+        "--summary-output",
+        help="Path to save summary report JSON file (optional)",
     )
     copy_parser.add_argument(
         "-v",
@@ -626,7 +632,7 @@ def cmd_copy(args: argparse.Namespace) -> int:
                 poll_interval=args.poll_interval,
             )
 
-        # Finish progress tracking and display final summary
+        # Finish progress tracking
         completed_count = sum(1 for op in batch.operations if op.status.value == "completed")
         failed_count = sum(1 for op in batch.operations if op.status.value == "failed")
         skipped_count = sum(1 for op in batch.operations if op.status.value == "skipped")
@@ -634,19 +640,45 @@ def cmd_copy(args: argparse.Namespace) -> int:
 
         # Update final counts
         progress_tracker.update(completed=completed_count, errors=failed_count)
+        progress_tracker.finish()
 
-        def final_message() -> str:
-            return (
-                f"\n"
-                f"Copy operation completed:\n"
-                f"  Total: {len(batch.operations)}\n"
-                f"  Completed: {completed_count}\n"
-                f"  Failed: {failed_count}\n"
-                f"  Skipped: {skipped_count}\n"
-                f"  In Progress: {in_progress_count}"
+        # Generate summary report
+        end_time = datetime.now(timezone.utc)
+        duration = end_time.timestamp() - progress_tracker.start_time
+
+        # Collect failure details
+        failures = [
+            FailureDetail(
+                recovery_point_arn=op.source_recovery_point_arn,
+                error_message=op.error_message or "Unknown error",
+                timestamp=op.completed_at,
             )
+            for op in batch.operations
+            if op.status.value == "failed"
+        ]
 
-        progress_tracker.finish(final_message)
+        summary_report = SummaryReport(
+            total_items=len(batch.operations),
+            completed=completed_count,
+            failed=failed_count,
+            skipped=skipped_count,
+            in_progress=in_progress_count,
+            duration_seconds=duration,
+            start_time=datetime.fromtimestamp(progress_tracker.start_time, tz=timezone.utc),
+            end_time=end_time,
+            failures=failures,
+        )
+
+        # Display summary to console
+        logger.info(summary_report.format_console_summary())
+
+        # Save summary to JSON file if requested
+        if args.summary_output:
+            try:
+                summary_report.save_to_file(args.summary_output)
+                logger.info(f"Summary report saved to: {args.summary_output}")
+            except Exception as e:
+                logger.error(f"Failed to save summary report: {e}")
 
         # Save final state
         save_state_on_shutdown()
