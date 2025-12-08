@@ -6,7 +6,7 @@ Represents a recovery point with its metadata and provides business logic
 for comparison and filtering operations.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
@@ -43,6 +43,7 @@ class RecoveryPoint:
         status: Current status (COMPLETED, PARTIAL, DELETING, EXPIRED)
         size_bytes: Size of the backup in bytes
         backup_job_id: ID of the backup job that created this recovery point
+        metadata: Optional external metadata enriched from CSV (e.g., APMID, tags)
     """
 
     recovery_point_arn: str
@@ -54,6 +55,7 @@ class RecoveryPoint:
     status: str
     size_bytes: int
     backup_job_id: str
+    metadata: dict[str, str] = field(default_factory=dict)
 
     def is_completed(self) -> bool:
         """Check if recovery point is fully completed.
@@ -91,6 +93,29 @@ class RecoveryPoint:
             Size in GB rounded to 2 decimal places
         """
         return round(self.size_bytes / (1024**3), 2)
+
+    def get_metadata(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Get a specific metadata value.
+
+        Args:
+            key: Metadata key to retrieve (e.g., "APMID")
+            default: Default value if key not found
+
+        Returns:
+            Metadata value or default
+        """
+        return self.metadata.get(key, default)
+
+    def has_metadata(self, key: str) -> bool:
+        """Check if metadata contains a specific key.
+
+        Args:
+            key: Metadata key to check
+
+        Returns:
+            True if key exists in metadata
+        """
+        return key in self.metadata
 
 
 if __name__ == "__main__":
