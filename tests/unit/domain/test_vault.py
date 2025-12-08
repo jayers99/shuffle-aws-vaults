@@ -54,3 +54,66 @@ def test_vault_immutability(sample_vault: Vault) -> None:
     """Test that vaults are immutable."""
     with pytest.raises(AttributeError):
         sample_vault.name = "new-name"  # type: ignore
+
+
+def test_has_compliance_lock_with_min_retention() -> None:
+    """Test has_compliance_lock when min_retention_days is set."""
+    vault = Vault(
+        name="compliance-vault",
+        arn="arn:aws:backup:us-east-1:123456789012:backup-vault:compliance-vault",
+        region="us-east-1",
+        account_id="123456789012",
+        min_retention_days=90,
+    )
+    assert vault.has_compliance_lock() is True
+
+
+def test_has_compliance_lock_with_max_retention() -> None:
+    """Test has_compliance_lock when max_retention_days is set."""
+    vault = Vault(
+        name="compliance-vault",
+        arn="arn:aws:backup:us-east-1:123456789012:backup-vault:compliance-vault",
+        region="us-east-1",
+        account_id="123456789012",
+        max_retention_days=365,
+    )
+    assert vault.has_compliance_lock() is True
+
+
+def test_has_compliance_lock_with_both_retention() -> None:
+    """Test has_compliance_lock when both min and max retention days are set."""
+    vault = Vault(
+        name="compliance-vault",
+        arn="arn:aws:backup:us-east-1:123456789012:backup-vault:compliance-vault",
+        region="us-east-1",
+        account_id="123456789012",
+        min_retention_days=90,
+        max_retention_days=365,
+    )
+    assert vault.has_compliance_lock() is True
+
+
+def test_has_compliance_lock_without_retention() -> None:
+    """Test has_compliance_lock when no retention settings are configured."""
+    vault = Vault(
+        name="no-compliance-vault",
+        arn="arn:aws:backup:us-east-1:123456789012:backup-vault:no-compliance-vault",
+        region="us-east-1",
+        account_id="123456789012",
+    )
+    assert vault.has_compliance_lock() is False
+
+
+def test_vault_locked_status() -> None:
+    """Test vault locked status."""
+    vault = Vault(
+        name="locked-vault",
+        arn="arn:aws:backup:us-east-1:123456789012:backup-vault:locked-vault",
+        region="us-east-1",
+        account_id="123456789012",
+        min_retention_days=90,
+        max_retention_days=365,
+        locked=True,
+    )
+    assert vault.locked is True
+    assert vault.has_compliance_lock() is True
