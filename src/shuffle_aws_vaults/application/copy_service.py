@@ -5,11 +5,16 @@ Service for copying recovery points.
 Orchestrates the migration of recovery points from source to destination account.
 """
 
+import logging
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, Protocol
 
 from shuffle_aws_vaults.domain.migration_result import CopyOperation, MigrationBatch, MigrationStatus
 from shuffle_aws_vaults.domain.recovery_point import RecoveryPoint
+
+logger = logging.getLogger(__name__)
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
@@ -307,6 +312,175 @@ class CopyService:
                         idx,
                         total,
                     )
+
+        if batch.is_complete():
+            batch.complete()
+
+        return batch
+
+    def copy_multithreaded(
+        self,
+        recovery_points: list[RecoveryPoint],
+        dest_account_id: str,
+        region: str,
+        workers: int = 10,
+        progress_callback: Callable[[str, int, int], None] | None = None,
+        shutdown_check: Callable[[], bool] | None = None,
+        poll_interval: int = 30,
+    ) -> MigrationBatch:
+        """Copy recovery points in parallel using multiple worker threads.
+
+        Uses ThreadPoolExecutor for parallel copy jobs with thread-safe
+        operation tracking.
+
+        Args:
+            recovery_points: List of recovery points to copy
+            dest_account_id: Destination account ID
+            region: AWS region
+            workers: Number of concurrent worker threads (default: 10)
+            progress_callback: Optional callback for progress updates (message, current, total)
+            shutdown_check: Optional callback to check if shutdown requested
+            poll_interval: Seconds between status checks (default: 30)
+
+        Returns:
+            MigrationBatch with final results
+        """
+        batch = self.create_copy_batch(recovery_points, dest_account_id, "multithreaded")
+
+        if self.dry_run:
+            for op in batch.operations:
+                if op.status == MigrationStatus.PENDING:
+                    op.skip("Dry run mode")
+            return batch
+
+        batch.start()
+        total = len(batch.operations)
+
+        # Thread-safe tracking of completed operations
+        completed_count = 0
+        completed_lock = threading.Lock()
+
+        def process_copy_operation(idx: int, operation: CopyOperation) -> tuple[int, CopyOperation]:
+            """Process a single copy operation (submit + poll).
+
+            Returns:
+                Tuple of (index, updated operation)
+            """
+            nonlocal completed_count
+
+            # Check for shutdown
+            if shutdown_check and shutdown_check():
+                return (idx, operation)
+
+            if operation.status != MigrationStatus.PENDING:
+                return (idx, operation)
+
+            try:
+                # Start copy job
+                if progress_callback:
+                    with completed_lock:
+                        progress_callback(
+                            f"Worker {threading.current_thread().name}: Starting copy for {operation.source_recovery_point_arn[:80]}...",
+                            completed_count,
+                            total,
+                        )
+
+                copy_job_id = self.copy_repo.start_copy_job(
+                    source_recovery_point_arn=operation.source_recovery_point_arn,
+                    source_vault_name=operation.source_vault_name,
+                    dest_vault_name=operation.dest_vault_name,
+                    dest_account_id=dest_account_id,
+                    region=region,
+                )
+                operation.start(copy_job_id)
+
+                # Poll for completion
+                while True:
+                    # Check for shutdown
+                    if shutdown_check and shutdown_check():
+                        if progress_callback:
+                            with completed_lock:
+                                progress_callback(
+                                    f"Worker {threading.current_thread().name}: Shutdown requested during polling",
+                                    completed_count,
+                                    total,
+                                )
+                        break
+
+                    time.sleep(poll_interval)
+
+                    status = self.copy_repo.get_copy_job_status(copy_job_id, region)
+
+                    if status == "COMPLETED":
+                        operation.complete()
+                        with completed_lock:
+                            completed_count += 1
+                            if progress_callback:
+                                progress_callback(
+                                    f"Worker {threading.current_thread().name}: Completed ({completed_count}/{total})",
+                                    completed_count,
+                                    total,
+                                )
+                        break
+                    elif status == "FAILED":
+                        operation.fail("Copy job failed")
+                        with completed_lock:
+                            completed_count += 1
+                            if progress_callback:
+                                progress_callback(
+                                    f"Worker {threading.current_thread().name}: Failed ({completed_count}/{total})",
+                                    completed_count,
+                                    total,
+                                )
+                        break
+                    else:
+                        # Still running, log progress
+                        if progress_callback:
+                            with completed_lock:
+                                progress_callback(
+                                    f"Worker {threading.current_thread().name}: Copy in progress ({status})",
+                                    completed_count,
+                                    total,
+                                )
+
+            except Exception as e:
+                operation.fail(str(e))
+                with completed_lock:
+                    completed_count += 1
+                    if progress_callback:
+                        progress_callback(
+                            f"Worker {threading.current_thread().name}: Error - {e}",
+                            completed_count,
+                            total,
+                        )
+
+            return (idx, operation)
+
+        # Submit operations to thread pool
+        logger.info(f"Starting {workers} worker threads for {total} operations")
+
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="CopyWorker") as executor:
+            # Submit all pending operations
+            futures = {}
+            for idx, operation in enumerate(batch.operations):
+                if operation.status == MigrationStatus.PENDING:
+                    future = executor.submit(process_copy_operation, idx, operation)
+                    futures[future] = idx
+
+            # Wait for completion (or shutdown)
+            for future in as_completed(futures):
+                if shutdown_check and shutdown_check():
+                    logger.info("Shutdown requested, waiting for workers to finish current operations...")
+                    break
+
+                try:
+                    idx, updated_op = future.result()
+                    # Update batch with result
+                    batch.operations[idx] = updated_op
+                except Exception as e:
+                    idx = futures[future]
+                    logger.error(f"Unexpected error processing operation {idx}: {e}")
+                    batch.operations[idx].fail(f"Unexpected error: {e}")
 
         if batch.is_complete():
             batch.complete()

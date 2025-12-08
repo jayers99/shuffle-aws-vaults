@@ -7,6 +7,7 @@ Manages credential lifecycle and handles expired token scenarios gracefully.
 
 import logging
 import sys
+import threading
 import time
 from functools import wraps
 from typing import Any, Callable, TypeVar
@@ -38,7 +39,10 @@ def file_info() -> dict[str, str]:
 
 
 class CredentialManager:
-    """Manages AWS credentials and handles expiration scenarios."""
+    """Manages AWS credentials and handles expiration scenarios.
+
+    This class is thread-safe for use in multi-threaded environments.
+    """
 
     MAX_AUTH_FAILURES = 3
     RETRY_DELAYS = [1, 2, 4]  # Exponential backoff in seconds
@@ -47,14 +51,22 @@ class CredentialManager:
         """Initialize the credential manager."""
         self._sessions: dict[str, boto3.Session] = {}
         self._auth_failure_count = 0
+        self._session_lock = threading.Lock()  # Protects session dict access
+        self._refresh_lock = threading.Lock()  # Global lock for credential refresh
 
     def clear_sessions(self) -> None:
-        """Clear all cached sessions to force credential reload."""
+        """Clear all cached sessions to force credential reload.
+
+        Thread-safe: acquires session lock before clearing.
+        """
         logger.info("Clearing cached AWS sessions to refresh credentials")
-        self._sessions.clear()
+        with self._session_lock:
+            self._sessions.clear()
 
     def get_session(self, region: str) -> boto3.Session:
         """Get or create a boto3 session for a region.
+
+        Thread-safe: acquires session lock before accessing dict.
 
         Args:
             region: AWS region
@@ -62,10 +74,11 @@ class CredentialManager:
         Returns:
             boto3 Session
         """
-        if region not in self._sessions:
-            logger.debug(f"Creating new session for region {region}")
-            self._sessions[region] = boto3.Session(region_name=region)
-        return self._sessions[region]
+        with self._session_lock:
+            if region not in self._sessions:
+                logger.debug(f"Creating new session for region {region}")
+                self._sessions[region] = boto3.Session(region_name=region)
+            return self._sessions[region]
 
     def _is_credential_error(self, error: ClientError) -> bool:
         """Check if error is credential-related.
@@ -104,6 +117,9 @@ class CredentialManager:
     def with_retry(self, func: Callable[..., T]) -> Callable[..., T]:
         """Decorator to wrap functions with credential retry logic.
 
+        Thread-safe: uses global refresh lock to pause all workers during
+        credential refresh operations.
+
         Args:
             func: Function to wrap
 
@@ -127,31 +143,36 @@ class CredentialManager:
                         # Not a credential error, don't retry
                         raise
 
-                    self._auth_failure_count += 1
-                    logger.warning(
-                        f"Credential error detected (attempt {attempt + 1}): {e.response['Error']['Code']}"
-                    )
-
-                    # Check if we've hit max failures
-                    if self._auth_failure_count >= self.MAX_AUTH_FAILURES:
+                    # Acquire global refresh lock to pause all workers
+                    # Only one thread handles credential refresh at a time
+                    with self._refresh_lock:
+                        self._auth_failure_count += 1
                         logger.warning(
-                            f"Hit {self.MAX_AUTH_FAILURES} consecutive auth failures"
+                            f"Credential error detected (attempt {attempt + 1}): {e.response['Error']['Code']}"
                         )
-                        self._wait_for_user_refresh()
-                        # Clear sessions and retry
-                        self.clear_sessions()
-                        continue
 
-                    # Not max failures yet - clear sessions and retry with backoff
-                    if attempt < len(self.RETRY_DELAYS):
-                        delay = self.RETRY_DELAYS[attempt]
-                        logger.info(f"Refreshing credentials and retrying in {delay}s...")
-                        self.clear_sessions()
-                        time.sleep(delay)
-                    else:
-                        # Out of retries
-                        logger.error("Exhausted all retry attempts")
-                        raise
+                        # Check if we've hit max failures
+                        if self._auth_failure_count >= self.MAX_AUTH_FAILURES:
+                            logger.warning(
+                                f"Hit {self.MAX_AUTH_FAILURES} consecutive auth failures"
+                            )
+                            self._wait_for_user_refresh()
+                            # Clear sessions to force fresh credentials
+                            self.clear_sessions()
+                            # Reset attempt counter to retry after user refresh
+                            # This is safe because user has manually refreshed
+                            continue
+
+                        # Not max failures yet - clear sessions and retry with backoff
+                        if attempt < len(self.RETRY_DELAYS):
+                            delay = self.RETRY_DELAYS[attempt]
+                            logger.info(f"Refreshing credentials and retrying in {delay}s...")
+                            self.clear_sessions()
+                            time.sleep(delay)
+                        else:
+                            # Out of retries
+                            logger.error("Exhausted all retry attempts")
+                            raise
 
             # Should never reach here, but just in case
             raise RuntimeError("Unexpected state in retry logic")

@@ -176,6 +176,12 @@ def create_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip IAM permission validation before starting copy",
     )
+    copy_parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Number of concurrent worker threads (default: 1 for single-threaded)",
+    )
 
     # verify command
     verify_parser = subparsers.add_parser(
@@ -556,15 +562,27 @@ def cmd_copy(args: argparse.Namespace) -> int:
             logger.info(f"[{current}/{total}] {message}")
 
         # Execute copy operation
-        logger.info("Starting copy operation...")
-        batch = copy_service.copy_single_threaded(
-            recovery_points=recovery_points,
-            dest_account_id=args.dest_account,
-            region=args.region,
-            progress_callback=progress_callback,
-            shutdown_check=shutdown_coordinator.is_shutdown_requested,
-            poll_interval=args.poll_interval,
-        )
+        if args.workers > 1:
+            logger.info(f"Starting multithreaded copy operation with {args.workers} workers...")
+            batch = copy_service.copy_multithreaded(
+                recovery_points=recovery_points,
+                dest_account_id=args.dest_account,
+                region=args.region,
+                workers=args.workers,
+                progress_callback=progress_callback,
+                shutdown_check=shutdown_coordinator.is_shutdown_requested,
+                poll_interval=args.poll_interval,
+            )
+        else:
+            logger.info("Starting single-threaded copy operation...")
+            batch = copy_service.copy_single_threaded(
+                recovery_points=recovery_points,
+                dest_account_id=args.dest_account,
+                region=args.region,
+                progress_callback=progress_callback,
+                shutdown_check=shutdown_coordinator.is_shutdown_requested,
+                poll_interval=args.poll_interval,
+            )
 
         # Display summary
         logger.info("\nCopy operation completed:")
