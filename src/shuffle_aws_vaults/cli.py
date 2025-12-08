@@ -124,8 +124,12 @@ def create_parser() -> argparse.ArgumentParser:
         help="Comma-separated list of allowed APMIDs (e.g., 'APP001,APP002')",
     )
     filter_parser.add_argument(
+        "--excluded-apmids",
+        help="Comma-separated list of excluded APMIDs (e.g., 'APP003,APP004')",
+    )
+    filter_parser.add_argument(
         "--metadata-csv",
-        help="Path to CSV file with metadata (required if using --allowed-apmids)",
+        help="Path to CSV file with metadata (required if using APMID filters)",
     )
 
     # copy command
@@ -151,6 +155,18 @@ def create_parser() -> argparse.ArgumentParser:
     copy_parser.add_argument(
         "--config",
         help="Path to filter configuration file (optional)",
+    )
+    copy_parser.add_argument(
+        "--allowed-apmids",
+        help="Comma-separated list of allowed APMIDs (e.g., 'APP001,APP002')",
+    )
+    copy_parser.add_argument(
+        "--excluded-apmids",
+        help="Comma-separated list of excluded APMIDs (e.g., 'APP003,APP004')",
+    )
+    copy_parser.add_argument(
+        "--metadata-csv",
+        help="Path to CSV file with metadata (required if using APMID filters)",
     )
     copy_parser.add_argument(
         "--poll-interval",
@@ -370,9 +386,9 @@ def cmd_filter(args: argparse.Namespace) -> int:
         f"Filtering recovery points from vault {args.vault} in account {args.source_account}"
     )
 
-    # Validate that metadata-csv is provided if allowed-apmids is used
-    if args.allowed_apmids and not args.metadata_csv:
-        logger.error("--metadata-csv is required when using --allowed-apmids")
+    # Validate that metadata-csv is provided if APMID filters are used
+    if (args.allowed_apmids or args.excluded_apmids) and not args.metadata_csv:
+        logger.error("--metadata-csv is required when using --allowed-apmids or --excluded-apmids")
         return 1
 
     if args.dry_run:
@@ -402,13 +418,22 @@ def cmd_filter(args: argparse.Namespace) -> int:
             )
 
         # Apply filters if specified
-        if args.allowed_apmids:
-            logger.info(f"Applying APMID filter: {args.allowed_apmids}")
-            rules = FilterRuleSet(
-                rules=[
+        if args.allowed_apmids or args.excluded_apmids:
+            rules_list = []
+
+            if args.allowed_apmids:
+                logger.info(f"Applying allowed APMID filter: {args.allowed_apmids}")
+                rules_list.append(
                     FilterRule(FilterCriteria.APMID_IN_SET, args.allowed_apmids, include=True)
-                ]
-            )
+                )
+
+            if args.excluded_apmids:
+                logger.info(f"Applying excluded APMID filter: {args.excluded_apmids}")
+                rules_list.append(
+                    FilterRule(FilterCriteria.APMID_NOT_IN_SET, args.excluded_apmids, include=True)
+                )
+
+            rules = FilterRuleSet(rules=rules_list)
             filter_service = FilterService(rules)
 
             # Get filter summary
@@ -467,6 +492,11 @@ def cmd_copy(args: argparse.Namespace) -> int:
     # Validate flags
     if args.resume and args.reset:
         logger.error("Cannot use --resume and --reset together")
+        return 1
+
+    # Validate that metadata-csv is provided if APMID filters are used
+    if (args.allowed_apmids or args.excluded_apmids) and not args.metadata_csv:
+        logger.error("--metadata-csv is required when using --allowed-apmids or --excluded-apmids")
         return 1
 
     # Initialize state repository
@@ -576,6 +606,53 @@ def cmd_copy(args: argparse.Namespace) -> int:
         if len(recovery_points) == 0:
             logger.info("No recovery points to copy")
             return 0
+
+        # Enrich with CSV metadata if provided
+        if args.metadata_csv:
+            logger.info(f"Loading metadata from {args.metadata_csv}")
+            csv_repo = CSVMetadataRepository(args.metadata_csv)
+            enrichment_service = MetadataEnrichmentService(csv_repo)
+            recovery_points = enrichment_service.enrich_recovery_points(recovery_points)
+
+            stats = enrichment_service.get_enrichment_stats(recovery_points)
+            logger.info(
+                f"Enriched {stats['enriched_count']}/{stats['total_count']} recovery points"
+            )
+
+        # Apply APMID filters if specified
+        if args.allowed_apmids or args.excluded_apmids:
+            from shuffle_aws_vaults.application.filter_service import FilterService
+            from shuffle_aws_vaults.domain.filter_rule import FilterCriteria, FilterRule, FilterRuleSet
+
+            rules_list = []
+
+            if args.allowed_apmids:
+                logger.info(f"Applying allowed APMID filter: {args.allowed_apmids}")
+                rules_list.append(
+                    FilterRule(FilterCriteria.APMID_IN_SET, args.allowed_apmids, include=True)
+                )
+
+            if args.excluded_apmids:
+                logger.info(f"Applying excluded APMID filter: {args.excluded_apmids}")
+                rules_list.append(
+                    FilterRule(FilterCriteria.APMID_NOT_IN_SET, args.excluded_apmids, include=True)
+                )
+
+            rules = FilterRuleSet(rules=rules_list)
+            filter_service = FilterService(rules)
+
+            # Apply filters
+            original_count = len(recovery_points)
+            recovery_points, _ = filter_service.apply_filters(recovery_points)
+            filtered_count = len(recovery_points)
+            logger.info(
+                f"Filtered recovery points: {filtered_count}/{original_count} remaining "
+                f"({original_count - filtered_count} excluded)"
+            )
+
+            if len(recovery_points) == 0:
+                logger.info("No recovery points match the filter criteria")
+                return 0
 
         # Update state with vault name if not already set
         if not copy_state.vault_name:
