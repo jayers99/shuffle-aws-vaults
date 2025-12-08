@@ -104,6 +104,28 @@ class CredentialManager:
             "UnrecognizedClientException",
         ]
 
+    def _is_transient_error(self, error: ClientError) -> bool:
+        """Check if error is transient and should be retried.
+
+        Args:
+            error: ClientError from boto3
+
+        Returns:
+            True if error is transient (throttling, timeouts, service unavailable)
+        """
+        error_code = error.response.get("Error", {}).get("Code", "")
+        return error_code in [
+            "Throttling",
+            "ThrottlingException",
+            "TooManyRequestsException",
+            "RequestLimitExceeded",
+            "ServiceUnavailable",
+            "InternalError",
+            "InternalFailure",
+            "RequestTimeout",
+            "RequestTimeoutException",
+        ]
+
     def _wait_for_user_refresh(self) -> None:
         """Wait for user to refresh credentials and press a key."""
         print("\n" + "=" * 60)
@@ -122,7 +144,13 @@ class CredentialManager:
         self._auth_failure_count = 0
 
     def with_retry(self, func: Callable[..., T]) -> Callable[..., T]:
-        """Decorator to wrap functions with credential retry logic.
+        """Decorator to wrap functions with credential and transient error retry logic.
+
+        Handles two types of errors:
+        1. Transient AWS errors (throttling, timeouts, service unavailable): retries with
+           exponential backoff up to 3 attempts
+        2. Credential errors: refreshes credentials and retries, with user prompt after
+           MAX_AUTH_FAILURES consecutive failures
 
         Thread-safe: uses global refresh lock to pause all workers during
         credential refresh operations.
@@ -136,53 +164,89 @@ class CredentialManager:
 
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> T:
-            for attempt in range(len(self.RETRY_DELAYS) + 1):
+            # Transient error retry parameters
+            max_transient_attempts = 3
+            initial_delay = 1.0
+            max_delay = 60.0
+            exponential_base = 2.0
+
+            transient_attempt = 0
+            transient_delay = initial_delay
+
+            # Outer loop for transient error retries
+            while transient_attempt < max_transient_attempts:
                 try:
-                    result = func(*args, **kwargs)
-                    # Success - reset failure count
-                    if self._auth_failure_count > 0:
-                        logger.info("Operation succeeded after credential refresh")
-                        self._auth_failure_count = 0
-                    return result
+                    # Inner loop for credential error retries
+                    for cred_attempt in range(len(self.RETRY_DELAYS) + 1):
+                        try:
+                            result = func(*args, **kwargs)
+                            # Success - reset failure count
+                            if self._auth_failure_count > 0:
+                                logger.info("Operation succeeded after credential refresh")
+                                self._auth_failure_count = 0
+                            return result
+
+                        except ClientError as e:
+                            if not self._is_credential_error(e):
+                                # Not a credential error, propagate to outer try/except
+                                raise
+
+                            # Acquire global refresh lock to pause all workers
+                            # Only one thread handles credential refresh at a time
+                            with self._refresh_lock:
+                                self._auth_failure_count += 1
+                                logger.warning(
+                                    f"Credential error detected (attempt {cred_attempt + 1}): {e.response['Error']['Code']}"
+                                )
+
+                                # Check if we've hit max failures
+                                if self._auth_failure_count >= self.MAX_AUTH_FAILURES:
+                                    logger.warning(
+                                        f"Hit {self.MAX_AUTH_FAILURES} consecutive auth failures"
+                                    )
+                                    self._wait_for_user_refresh()
+                                    # Clear sessions to force fresh credentials
+                                    self.clear_sessions()
+                                    # Reset attempt counter to retry after user refresh
+                                    # This is safe because user has manually refreshed
+                                    continue
+
+                                # Not max failures yet - clear sessions and retry with backoff
+                                if cred_attempt < len(self.RETRY_DELAYS):
+                                    delay = self.RETRY_DELAYS[cred_attempt]
+                                    logger.info(f"Refreshing credentials and retrying in {delay}s...")
+                                    self.clear_sessions()
+                                    time.sleep(delay)
+                                else:
+                                    # Out of retries
+                                    logger.error("Exhausted all retry attempts")
+                                    raise
+
+                    # Should never reach here
+                    raise RuntimeError("Unexpected state in credential retry logic")
 
                 except ClientError as e:
-                    if not self._is_credential_error(e):
-                        # Not a credential error, don't retry
+                    # Check if it's a transient error
+                    if not self._is_transient_error(e):
+                        # Not transient, not credential - don't retry
                         raise
 
-                    # Acquire global refresh lock to pause all workers
-                    # Only one thread handles credential refresh at a time
-                    with self._refresh_lock:
-                        self._auth_failure_count += 1
-                        logger.warning(
-                            f"Credential error detected (attempt {attempt + 1}): {e.response['Error']['Code']}"
-                        )
+                    transient_attempt += 1
+                    if transient_attempt >= max_transient_attempts:
+                        # Out of transient retries
+                        logger.error(f"Failed after {max_transient_attempts} transient error retries")
+                        raise
 
-                        # Check if we've hit max failures
-                        if self._auth_failure_count >= self.MAX_AUTH_FAILURES:
-                            logger.warning(
-                                f"Hit {self.MAX_AUTH_FAILURES} consecutive auth failures"
-                            )
-                            self._wait_for_user_refresh()
-                            # Clear sessions to force fresh credentials
-                            self.clear_sessions()
-                            # Reset attempt counter to retry after user refresh
-                            # This is safe because user has manually refreshed
-                            continue
+                    # Log and retry with exponential backoff
+                    logger.warning(
+                        f"Transient error in {func.__name__} (attempt {transient_attempt}/{max_transient_attempts}): "
+                        f"{e.response['Error']['Code']}. Retrying in {transient_delay:.1f}s..."
+                    )
+                    time.sleep(transient_delay)
+                    transient_delay = min(transient_delay * exponential_base, max_delay)
 
-                        # Not max failures yet - clear sessions and retry with backoff
-                        if attempt < len(self.RETRY_DELAYS):
-                            delay = self.RETRY_DELAYS[attempt]
-                            logger.info(f"Refreshing credentials and retrying in {delay}s...")
-                            self.clear_sessions()
-                            time.sleep(delay)
-                        else:
-                            # Out of retries
-                            logger.error("Exhausted all retry attempts")
-                            raise
-
-            # Should never reach here, but just in case
-            raise RuntimeError("Unexpected state in retry logic")
+            # Should never reach here
+            raise RuntimeError("Unexpected state in transient retry logic")
 
         return wrapper
 

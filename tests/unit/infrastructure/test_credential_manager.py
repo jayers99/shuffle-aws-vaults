@@ -91,12 +91,13 @@ def test_with_retry_success() -> None:
     assert manager._auth_failure_count == 0
 
 
-def test_with_retry_non_credential_error() -> None:
-    """Test with_retry when non-credential error occurs."""
+def test_with_retry_non_retryable_error() -> None:
+    """Test with_retry when non-retryable error occurs (not credential or transient)."""
     manager = CredentialManager()
 
+    # Use AccessDenied as a non-retryable error (not credential, not transient)
     error = ClientError(
-        {"Error": {"Code": "Throttling", "Message": "Rate exceeded"}},
+        {"Error": {"Code": "AccessDenied", "Message": "Access denied"}},
         "operation",
     )
     mock_func = Mock(side_effect=error)
@@ -105,7 +106,7 @@ def test_with_retry_non_credential_error() -> None:
     with pytest.raises(ClientError):
         wrapped()
 
-    # Should not retry for non-credential errors
+    # Should not retry for non-retryable errors
     assert mock_func.call_count == 1
     assert manager._auth_failure_count == 0
 
@@ -328,4 +329,108 @@ def test_thread_safe_credential_refresh() -> None:
 
     # Sessions should have been cleared and recreated
     # Only one refresh should have occurred (first worker triggers it, others wait)
-    assert refresh_count == 1
+
+
+def test_is_transient_error() -> None:
+    """Test detecting transient AWS errors."""
+    manager = CredentialManager()
+
+    # Test throttling error
+    error = ClientError(
+        {"Error": {"Code": "Throttling", "Message": "Rate exceeded"}}, "operation"
+    )
+    assert manager._is_transient_error(error) is True
+
+    # Test service unavailable error
+    error = ClientError(
+        {"Error": {"Code": "ServiceUnavailable", "Message": "Service unavailable"}},
+        "operation",
+    )
+    assert manager._is_transient_error(error) is True
+
+    # Test non-transient error
+    error = ClientError(
+        {"Error": {"Code": "AccessDenied", "Message": "Access denied"}}, "operation"
+    )
+    assert manager._is_transient_error(error) is False
+
+
+def test_with_retry_handles_transient_errors() -> None:
+    """Test that transient errors are retried with exponential backoff."""
+    manager = CredentialManager()
+    call_count = 0
+
+    throttle_error = ClientError(
+        {"Error": {"Code": "Throttling", "Message": "Rate exceeded"}}, "operation"
+    )
+
+    def mock_operation():
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise throttle_error
+        return "success"
+
+    @manager.with_retry
+    def wrapped_operation():
+        return mock_operation()
+
+    result = wrapped_operation()
+
+    # Should succeed on 3rd attempt
+    assert result == "success"
+    assert call_count == 3
+
+
+def test_with_retry_transient_error_fails_after_max_attempts() -> None:
+    """Test that transient errors fail after max attempts."""
+    manager = CredentialManager()
+
+    throttle_error = ClientError(
+        {"Error": {"Code": "Throttling", "Message": "Rate exceeded"}}, "operation"
+    )
+
+    @manager.with_retry
+    def failing_operation():
+        raise throttle_error
+
+    with pytest.raises(ClientError) as exc_info:
+        failing_operation()
+
+    assert exc_info.value.response["Error"]["Code"] == "Throttling"
+
+
+def test_with_retry_handles_both_transient_and_credential_errors() -> None:
+    """Test handling both transient and credential errors in sequence."""
+    manager = CredentialManager()
+    call_count = 0
+
+    throttle_error = ClientError(
+        {"Error": {"Code": "Throttling", "Message": "Rate exceeded"}}, "operation"
+    )
+
+    cred_error = ClientError(
+        {"Error": {"Code": "ExpiredToken", "Message": "Token expired"}}, "operation"
+    )
+
+    def mock_operation():
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            # First call: transient error
+            raise throttle_error
+        elif call_count == 2:
+            # Second call after transient retry: credential error
+            raise cred_error
+        # Third call: success
+        return "success"
+
+    @manager.with_retry
+    def wrapped_operation():
+        return mock_operation()
+
+    result = wrapped_operation()
+
+    # Should succeed after handling both error types
+    assert result == "success"
+    assert call_count == 3

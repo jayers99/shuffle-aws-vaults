@@ -1,5 +1,6 @@
 """Unit tests for MetadataEnrichmentService."""
 
+import logging
 from datetime import datetime, timezone
 from unittest.mock import Mock
 
@@ -179,3 +180,36 @@ def test_get_enrichment_stats() -> None:
     assert stats["total_count"] == 3
     assert stats["enriched_count"] == 2
     assert stats["missing_count"] == 1
+
+
+def test_enrich_recovery_point_logs_warning_for_missing_metadata(caplog: pytest.LogCaptureFixture) -> None:
+    """Test that a warning is logged when metadata is missing."""
+    # Arrange
+    rp = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-missing",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-missing",
+        resource_type="EBS",
+        creation_date=datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc),
+        completion_date=datetime(2025, 1, 1, 13, 0, 0, tzinfo=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-missing",
+    )
+
+    mock_repo = Mock()
+    mock_repo.get_metadata_for_resource.return_value = None
+
+    service = MetadataEnrichmentService(mock_repo)
+
+    # Act
+    with caplog.at_level(logging.WARNING):
+        enriched = service.enrich_recovery_point(rp)
+
+    # Assert
+    assert enriched is rp  # Same object returned
+    assert len(caplog.records) == 1
+    assert caplog.records[0].levelname == "WARNING"
+    assert "No metadata found" in caplog.records[0].message
+    assert "vol-missing" in caplog.records[0].message
+    assert "rp-missing" in caplog.records[0].message
