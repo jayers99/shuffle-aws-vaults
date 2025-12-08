@@ -89,6 +89,40 @@ def test_parser_copy_command() -> None:
     assert args.batch_size == 20
 
 
+def test_parser_copy_command_with_resume_flags() -> None:
+    """Test copy command with resume/reset flags."""
+    parser = create_parser()
+
+    # Test with --resume flag
+    args_resume = parser.parse_args([
+        "copy",
+        "--source-account", "111111111111",
+        "--dest-account", "222222222222",
+        "--resume",
+    ])
+    assert args_resume.resume is True
+    assert args_resume.reset is False
+
+    # Test with --reset flag
+    args_reset = parser.parse_args([
+        "copy",
+        "--source-account", "111111111111",
+        "--dest-account", "222222222222",
+        "--reset",
+    ])
+    assert args_reset.resume is False
+    assert args_reset.reset is True
+
+    # Test with --state-file
+    args_state = parser.parse_args([
+        "copy",
+        "--source-account", "111111111111",
+        "--dest-account", "222222222222",
+        "--state-file", "/tmp/my-state.json",
+    ])
+    assert args_state.state_file == "/tmp/my-state.json"
+
+
 def test_parser_verify_command() -> None:
     """Test verify command parsing."""
     parser = create_parser()
