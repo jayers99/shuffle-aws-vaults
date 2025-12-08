@@ -9,8 +9,9 @@ import logging
 import sys
 import threading
 import time
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 import boto3
 from botocore.exceptions import ClientError
@@ -195,8 +196,11 @@ class CredentialManager:
                             # Only one thread handles credential refresh at a time
                             with self._refresh_lock:
                                 self._auth_failure_count += 1
+                                error_code = e.response["Error"]["Code"]
+                                attempt_num = cred_attempt + 1
                                 logger.warning(
-                                    f"Credential error detected (attempt {cred_attempt + 1}): {e.response['Error']['Code']}"
+                                    f"Credential error detected "
+                                    f"(attempt {attempt_num}): {error_code}"
                                 )
 
                                 # Check if we've hit max failures
@@ -214,7 +218,9 @@ class CredentialManager:
                                 # Not max failures yet - clear sessions and retry with backoff
                                 if cred_attempt < len(self.RETRY_DELAYS):
                                     delay = self.RETRY_DELAYS[cred_attempt]
-                                    logger.info(f"Refreshing credentials and retrying in {delay}s...")
+                                    logger.info(
+                                        f"Refreshing credentials and retrying in {delay}s..."
+                                    )
                                     self.clear_sessions()
                                     time.sleep(delay)
                                 else:
@@ -234,13 +240,17 @@ class CredentialManager:
                     transient_attempt += 1
                     if transient_attempt >= max_transient_attempts:
                         # Out of transient retries
-                        logger.error(f"Failed after {max_transient_attempts} transient error retries")
+                        logger.error(
+                            f"Failed after {max_transient_attempts} transient error retries"
+                        )
                         raise
 
                     # Log and retry with exponential backoff
+                    error_code = e.response["Error"]["Code"]
                     logger.warning(
-                        f"Transient error in {func.__name__} (attempt {transient_attempt}/{max_transient_attempts}): "
-                        f"{e.response['Error']['Code']}. Retrying in {transient_delay:.1f}s..."
+                        f"Transient error in {func.__name__} "
+                        f"(attempt {transient_attempt}/{max_transient_attempts}): "
+                        f"{error_code}. Retrying in {transient_delay:.1f}s..."
                     )
                     time.sleep(transient_delay)
                     transient_delay = min(transient_delay * exponential_base, max_delay)

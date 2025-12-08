@@ -14,7 +14,10 @@ def test_failure_detail_creation() -> None:
         error_message="Copy job failed: Access denied",
     )
 
-    assert failure.recovery_point_arn == "arn:aws:backup:us-east-1:123456789012:recovery-point:abcd-1234"
+    assert (
+        failure.recovery_point_arn
+        == "arn:aws:backup:us-east-1:123456789012:recovery-point:abcd-1234"
+    )
     assert failure.error_message == "Copy job failed: Access denied"
     assert failure.timestamp is None
 
@@ -41,7 +44,10 @@ def test_failure_detail_to_dict() -> None:
     )
 
     data = failure.to_dict()
-    assert data["recovery_point_arn"] == "arn:aws:backup:us-east-1:123456789012:recovery-point:abcd-1234"
+    assert (
+        data["recovery_point_arn"]
+        == "arn:aws:backup:us-east-1:123456789012:recovery-point:abcd-1234"
+    )
     assert data["error_message"] == "Error"
     assert data["timestamp"] == now.isoformat()
 

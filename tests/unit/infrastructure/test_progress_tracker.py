@@ -85,12 +85,8 @@ def test_calculate_throughput() -> None:
     # Simulate processing over time by replacing the initial snapshot and adding new ones
     now = time.time()
     tracker.snapshots.clear()
-    tracker.snapshots.append(
-        ProgressSnapshot(timestamp=now - 10, completed=0, total=100, errors=0)
-    )
-    tracker.snapshots.append(
-        ProgressSnapshot(timestamp=now, completed=10, total=100, errors=0)
-    )
+    tracker.snapshots.append(ProgressSnapshot(timestamp=now - 10, completed=0, total=100, errors=0))
+    tracker.snapshots.append(ProgressSnapshot(timestamp=now, completed=10, total=100, errors=0))
 
     # Should calculate ~3600 items/hour (10 items in 10 seconds)
     throughput = tracker._calculate_throughput()
@@ -109,12 +105,8 @@ def test_calculate_eta() -> None:
     now = time.time()
     tracker.completed = 10  # Update completed count
     tracker.snapshots.clear()
-    tracker.snapshots.append(
-        ProgressSnapshot(timestamp=now - 10, completed=0, total=100, errors=0)
-    )
-    tracker.snapshots.append(
-        ProgressSnapshot(timestamp=now, completed=10, total=100, errors=0)
-    )
+    tracker.snapshots.append(ProgressSnapshot(timestamp=now - 10, completed=0, total=100, errors=0))
+    tracker.snapshots.append(ProgressSnapshot(timestamp=now, completed=10, total=100, errors=0))
 
     # Remaining: 90 items at 1 item/sec = 90 seconds
     eta = tracker._calculate_eta()
@@ -141,12 +133,8 @@ def test_format_progress_line() -> None:
     # Add some throughput data
     now = time.time()
     tracker.snapshots.clear()
-    tracker.snapshots.append(
-        ProgressSnapshot(timestamp=now - 10, completed=0, total=100, errors=0)
-    )
-    tracker.snapshots.append(
-        ProgressSnapshot(timestamp=now, completed=50, total=100, errors=2)
-    )
+    tracker.snapshots.append(ProgressSnapshot(timestamp=now - 10, completed=0, total=100, errors=0))
+    tracker.snapshots.append(ProgressSnapshot(timestamp=now, completed=50, total=100, errors=2))
 
     line = tracker._format_progress_line()
 
@@ -339,12 +327,8 @@ def test_progress_line_with_runtime_limit() -> None:
     # Add some throughput data
     now = time.time()
     tracker.snapshots.clear()
-    tracker.snapshots.append(
-        ProgressSnapshot(timestamp=now - 10, completed=0, total=100, errors=0)
-    )
-    tracker.snapshots.append(
-        ProgressSnapshot(timestamp=now, completed=50, total=100, errors=0)
-    )
+    tracker.snapshots.append(ProgressSnapshot(timestamp=now - 10, completed=0, total=100, errors=0))
+    tracker.snapshots.append(ProgressSnapshot(timestamp=now, completed=50, total=100, errors=0))
 
     line = tracker._format_progress_line()
 

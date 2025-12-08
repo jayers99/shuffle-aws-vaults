@@ -37,9 +37,7 @@ def test_filter_service_apply_filters() -> None:
     )
 
     # Filter for EBS only
-    rules = FilterRuleSet(
-        rules=[FilterRule(FilterCriteria.RESOURCE_TYPE, "EBS", include=True)]
-    )
+    rules = FilterRuleSet(rules=[FilterRule(FilterCriteria.RESOURCE_TYPE, "EBS", include=True)])
     service = FilterService(rules)
 
     included, excluded = service.apply_filters([rp_ebs, rp_rds])
@@ -149,9 +147,7 @@ def test_filter_service_get_summary() -> None:
         metadata={"APMID": "APP002"},
     )
 
-    rules = FilterRuleSet(
-        rules=[FilterRule(FilterCriteria.APMID_IN_SET, "APP001", include=True)]
-    )
+    rules = FilterRuleSet(rules=[FilterRule(FilterCriteria.APMID_IN_SET, "APP001", include=True)])
     service = FilterService(rules)
 
     summary = service.get_filter_summary([rp1, rp2])

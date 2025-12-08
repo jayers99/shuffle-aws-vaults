@@ -118,9 +118,7 @@ def test_list_recovery_points_with_pagination() -> None:
         assert recovery_points[0].resource_type == "EBS"
         assert recovery_points[1].resource_type == "RDS"
 
-        mock_client.get_paginator.assert_called_once_with(
-            "list_recovery_points_by_backup_vault"
-        )
+        mock_client.get_paginator.assert_called_once_with("list_recovery_points_by_backup_vault")
         mock_paginator.paginate.assert_called_once_with(BackupVaultName="test-vault")
 
 
@@ -234,9 +232,7 @@ def test_get_copy_job_status() -> None:
 
     # Mock boto3 client
     mock_client = Mock()
-    mock_client.describe_copy_job.return_value = {
-        "CopyJob": {"State": "COMPLETED"}
-    }
+    mock_client.describe_copy_job.return_value = {"CopyJob": {"State": "COMPLETED"}}
 
     with patch.object(repo, "_get_backup_client", return_value=mock_client):
         # Act

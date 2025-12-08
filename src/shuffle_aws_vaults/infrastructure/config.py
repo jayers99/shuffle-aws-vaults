@@ -7,7 +7,6 @@ Handles loading and validation of configuration from environment and files.
 
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
@@ -44,8 +43,8 @@ class AWSConfig:
 
     source_account_id: str
     dest_account_id: str
-    source_role_arn: Optional[str] = None
-    dest_role_arn: Optional[str] = None
+    source_role_arn: str | None = None
+    dest_role_arn: str | None = None
     region: str = "us-east-1"
     dry_run: bool = False
     batch_size: int = 10
@@ -64,9 +63,7 @@ class AWSConfig:
         dest_account = os.getenv("AWS_DEST_ACCOUNT_ID")
 
         if not source_account or not dest_account:
-            raise ValueError(
-                "AWS_SOURCE_ACCOUNT_ID and AWS_DEST_ACCOUNT_ID must be set"
-            )
+            raise ValueError("AWS_SOURCE_ACCOUNT_ID and AWS_DEST_ACCOUNT_ID must be set")
 
         return cls(
             source_account_id=source_account,

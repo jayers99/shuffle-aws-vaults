@@ -7,7 +7,6 @@ Provides business logic for filtering recovery points based on various criteria.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from shuffle_aws_vaults.domain.recovery_point import RecoveryPoint
 
@@ -41,6 +40,7 @@ class FilterCriteria(Enum):
     STATUS = "status"
     VAULT_NAME_PATTERN = "vault_name_pattern"
     APMID_IN_SET = "apmid_in_set"
+    APMID_NOT_IN_SET = "apmid_not_in_set"
 
 
 @dataclass(frozen=True)
@@ -93,6 +93,13 @@ class FilterRule:
                 apmid = recovery_point.get_metadata("APMID")
                 # Match if APMID exists and is in the allowed set
                 result = apmid is not None and apmid in allowed_apmids
+            case FilterCriteria.APMID_NOT_IN_SET:
+                # Parse comma-separated APMID list into a set
+                excluded_apmids = {apmid.strip() for apmid in str(self.value).split(",")}
+                # Get APMID from metadata, default to None if missing
+                apmid = recovery_point.get_metadata("APMID")
+                # Match if APMID does not exist or is not in the excluded set
+                result = apmid is None or apmid not in excluded_apmids
             case _:
                 result = False
 

@@ -5,7 +5,6 @@ AWS Backup repository implementation.
 Provides concrete implementations of repository protocols using boto3.
 """
 
-from datetime import datetime
 from typing import Any
 
 import boto3
@@ -63,9 +62,7 @@ class AWSBackupRepository:
         # Use credential manager for session handling
         # Note: Role assumption is not yet supported with credential manager
         if self.role_arn:
-            raise NotImplementedError(
-                "Role assumption not yet supported with credential manager"
-            )
+            raise NotImplementedError("Role assumption not yet supported with credential manager")
 
         return self._credential_manager.get_session(region)
 
@@ -205,9 +202,7 @@ class AWSBackupRepository:
         try:
             return _list_recovery_points_impl()
         except ClientError as e:
-            raise RuntimeError(
-                f"Failed to list recovery points in vault {vault_name}: {e}"
-            ) from e
+            raise RuntimeError(f"Failed to list recovery points in vault {vault_name}: {e}") from e
 
     def start_copy_job(
         self,

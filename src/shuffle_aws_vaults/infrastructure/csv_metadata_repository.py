@@ -9,8 +9,8 @@ and progress tracking.
 
 import csv
 import logging
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
@@ -47,7 +47,7 @@ class CSVMetadataRepository:
     PROGRESS_INTERVAL = 10000
 
     def __init__(
-        self, csv_path: str, progress_callback: Optional[Callable[[int], None]] = None
+        self, csv_path: str, progress_callback: Callable[[int], None] | None = None
     ) -> None:
         """Initialize CSV metadata repository.
 
@@ -56,7 +56,7 @@ class CSVMetadataRepository:
             progress_callback: Optional callback for progress updates (called with row count)
         """
         self.csv_path = Path(csv_path)
-        self._metadata_cache: Optional[dict[str, dict[str, str]]] = None
+        self._metadata_cache: dict[str, dict[str, str]] | None = None
         self._progress_callback = progress_callback
         self._total_rows: int = 0
 
@@ -88,7 +88,7 @@ class CSVMetadataRepository:
         rows_with_data = 0
 
         # Stream CSV file row by row
-        with open(self.csv_path, "r", encoding="utf-8") as csvfile:
+        with open(self.csv_path, encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
 
             if reader.fieldnames is None:
@@ -134,7 +134,7 @@ class CSVMetadataRepository:
 
         return metadata
 
-    def get_metadata_for_resource(self, resource_arn: str) -> Optional[dict[str, str]]:
+    def get_metadata_for_resource(self, resource_arn: str) -> dict[str, str] | None:
         """Get metadata for a specific resource ARN.
 
         O(1) lookup using resourceArn index.

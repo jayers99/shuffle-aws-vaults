@@ -6,7 +6,6 @@ Represents a backup vault and provides business logic for vault operations.
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
@@ -48,9 +47,9 @@ class Vault:
     region: str
     account_id: str
     recovery_point_count: int = 0
-    encryption_key_arn: Optional[str] = None
-    min_retention_days: Optional[int] = None
-    max_retention_days: Optional[int] = None
+    encryption_key_arn: str | None = None
+    min_retention_days: int | None = None
+    max_retention_days: int | None = None
     locked: bool = False
 
     def is_encrypted(self) -> bool:

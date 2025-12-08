@@ -76,9 +76,7 @@ def test_check_source_permissions_access_denied() -> None:
     # Mock boto3 client
     mock_client = Mock()
     error_response = {"Error": {"Code": "AccessDenied", "Message": "Access denied"}}
-    mock_client.list_backup_vaults.side_effect = ClientError(
-        error_response, "list_backup_vaults"
-    )
+    mock_client.list_backup_vaults.side_effect = ClientError(error_response, "list_backup_vaults")
 
     with patch.object(validator, "_get_backup_client", return_value=mock_client):
         results = validator.check_source_permissions("us-east-1")
@@ -102,9 +100,7 @@ def test_check_source_permissions_other_error() -> None:
     # Mock boto3 client
     mock_client = Mock()
     error_response = {"Error": {"Code": "Throttling", "Message": "Rate exceeded"}}
-    mock_client.list_backup_vaults.side_effect = ClientError(
-        error_response, "list_backup_vaults"
-    )
+    mock_client.list_backup_vaults.side_effect = ClientError(error_response, "list_backup_vaults")
 
     with patch.object(validator, "_get_backup_client", return_value=mock_client):
         results = validator.check_source_permissions("us-east-1")
@@ -162,9 +158,7 @@ def test_validate_permissions_some_denied() -> None:
     # Mock boto3 client
     mock_client = Mock()
     error_response = {"Error": {"Code": "AccessDenied", "Message": "Access denied"}}
-    mock_client.list_backup_vaults.side_effect = ClientError(
-        error_response, "list_backup_vaults"
-    )
+    mock_client.list_backup_vaults.side_effect = ClientError(error_response, "list_backup_vaults")
 
     with patch.object(validator, "_get_backup_client", return_value=mock_client):
         all_granted, results = validator.validate_permissions("us-east-1")

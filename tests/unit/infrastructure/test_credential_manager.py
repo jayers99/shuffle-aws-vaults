@@ -336,9 +336,7 @@ def test_is_transient_error() -> None:
     manager = CredentialManager()
 
     # Test throttling error
-    error = ClientError(
-        {"Error": {"Code": "Throttling", "Message": "Rate exceeded"}}, "operation"
-    )
+    error = ClientError({"Error": {"Code": "Throttling", "Message": "Rate exceeded"}}, "operation")
     assert manager._is_transient_error(error) is True
 
     # Test service unavailable error

@@ -8,9 +8,10 @@ Provides real-time progress updates with ETA calculation and throughput tracking
 import sys
 import time
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Callable, TextIO
+from typing import TextIO
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
@@ -290,11 +291,17 @@ class ProgressTracker:
 
         # ETA
         eta = self._calculate_eta()
-        eta_str = f"ETA: {self._format_duration(eta.total_seconds())}" if eta else "ETA: calculating..."
+        eta_str = (
+            f"ETA: {self._format_duration(eta.total_seconds())}" if eta else "ETA: calculating..."
+        )
 
         # Time remaining in runtime window (if limit set)
         time_remaining = self.get_time_remaining_in_window()
-        window_str = f"Window: {self._format_duration(time_remaining)}" if time_remaining is not None else None
+        window_str = (
+            f"Window: {self._format_duration(time_remaining)}"
+            if time_remaining is not None
+            else None
+        )
 
         # Errors
         error_str = f"errors: {self.errors}" if self.errors > 0 else ""

@@ -215,3 +215,163 @@ def test_filter_rule_apmid_whitespace_handling() -> None:
     # Test with extra whitespace around APMIDs
     rule = FilterRule(FilterCriteria.APMID_IN_SET, "APP001, APP002 , APP003", include=True)
     assert rule.matches(rp) is True
+
+
+def test_filter_rule_apmid_not_in_set_match() -> None:
+    """Test excluding APMIDs - recovery point passes when APMID not in excluded set."""
+    rp = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-6",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-6",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-6",
+        metadata={"APMID": "APP999", "Environment": "Production"},
+    )
+
+    # APP999 is not in the excluded set, so it should pass
+    rule = FilterRule(FilterCriteria.APMID_NOT_IN_SET, "APP001,APP002,APP003", include=True)
+    assert rule.matches(rp) is True
+
+
+def test_filter_rule_apmid_not_in_set_no_match() -> None:
+    """Test excluding APMIDs - recovery point is excluded when APMID is in excluded set."""
+    rp = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-7",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-7",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-7",
+        metadata={"APMID": "APP002", "Environment": "Production"},
+    )
+
+    # APP002 is in the excluded set, so it should not pass
+    rule = FilterRule(FilterCriteria.APMID_NOT_IN_SET, "APP001,APP002,APP003", include=True)
+    assert rule.matches(rp) is False
+
+
+def test_filter_rule_apmid_not_in_set_missing_metadata() -> None:
+    """Test excluding APMIDs when recovery point has no APMID metadata - should pass."""
+    rp = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-8",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-8",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-8",
+        metadata={"Environment": "Production"},  # No APMID
+    )
+
+    # Missing APMID should pass (not in excluded set)
+    rule = FilterRule(FilterCriteria.APMID_NOT_IN_SET, "APP001,APP002", include=True)
+    assert rule.matches(rp) is True
+
+
+def test_filter_rule_apmid_not_in_set_no_metadata() -> None:
+    """Test excluding APMIDs when recovery point has no metadata at all - should pass."""
+    rp = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-9",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-9",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-9",
+    )
+
+    # No metadata should pass (not in excluded set)
+    rule = FilterRule(FilterCriteria.APMID_NOT_IN_SET, "APP001,APP002", include=True)
+    assert rule.matches(rp) is True
+
+
+def test_filter_rule_apmid_not_in_set_whitespace_handling() -> None:
+    """Test APMID exclusion handles whitespace in comma-separated list."""
+    rp = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-10",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-10",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-10",
+        metadata={"APMID": "APP002"},
+    )
+
+    # Test with extra whitespace around APMIDs - APP002 should be excluded
+    rule = FilterRule(FilterCriteria.APMID_NOT_IN_SET, "APP001, APP002 , APP003", include=True)
+    assert rule.matches(rp) is False
+
+
+def test_filter_rule_combined_allowed_and_excluded_apmids() -> None:
+    """Test combining allowed and excluded APMID filters."""
+    # Create recovery points with different APMIDs
+    rp_allowed = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-11",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-11",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-11",
+        metadata={"APMID": "APP001"},
+    )
+
+    rp_excluded = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-12",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-12",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-12",
+        metadata={"APMID": "APP999"},
+    )
+
+    rp_not_in_allowed = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-13",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-13",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-13",
+        metadata={"APMID": "APP005"},
+    )
+
+    # Create rule set with both allowed and excluded filters
+    rules = FilterRuleSet(
+        rules=[
+            FilterRule(FilterCriteria.APMID_IN_SET, "APP001,APP002,APP003", include=True),
+            FilterRule(FilterCriteria.APMID_NOT_IN_SET, "APP999", include=True),
+        ],
+        match_all=True,
+    )
+
+    # APP001 is in allowed set and not in excluded set - should pass
+    assert rules.should_include(rp_allowed) is True
+
+    # APP999 is not in allowed set - should fail (doesn't matter if excluded)
+    assert rules.should_include(rp_excluded) is False
+
+    # APP005 is not in allowed set - should fail
+    assert rules.should_include(rp_not_in_allowed) is False

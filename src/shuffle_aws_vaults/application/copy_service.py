@@ -8,10 +8,15 @@ Orchestrates the migration of recovery points from source to destination account
 import logging
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Callable, Protocol
+from typing import Protocol
 
-from shuffle_aws_vaults.domain.migration_result import CopyOperation, MigrationBatch, MigrationStatus
+from shuffle_aws_vaults.domain.migration_result import (
+    CopyOperation,
+    MigrationBatch,
+    MigrationStatus,
+)
 from shuffle_aws_vaults.domain.recovery_point import RecoveryPoint
 
 logger = logging.getLogger(__name__)
@@ -298,14 +303,14 @@ class CopyService:
                     else:
                         # Still running, continue polling
                         if progress_callback:
-                            progress_callback(
-                                f"Copy in progress ({status}): {operation.source_recovery_point_arn}",
-                                idx,
-                                total,
-                            )
+                            rp_arn = operation.source_recovery_point_arn
+                            msg = f"Copy in progress ({status}): {rp_arn}"
+                            progress_callback(msg, idx, total)
 
             except Exception as e:
-                error_msg = f"Failed to copy recovery point {operation.source_recovery_point_arn}: {e}"
+                error_msg = (
+                    f"Failed to copy recovery point {operation.source_recovery_point_arn}: {e}"
+                )
                 logger.error(error_msg, exc_info=True)
                 operation.fail(str(e))
                 if progress_callback:
@@ -385,11 +390,10 @@ class CopyService:
                 # Start copy job
                 if progress_callback:
                     with completed_lock:
-                        progress_callback(
-                            f"Worker {threading.current_thread().name}: Starting copy for {operation.source_recovery_point_arn[:80]}...",
-                            completed_count,
-                            total,
-                        )
+                        worker = threading.current_thread().name
+                        rp_arn = operation.source_recovery_point_arn[:80]
+                        msg = f"Worker {worker}: Starting copy for {rp_arn}..."
+                        progress_callback(msg, completed_count, total)
 
                 copy_job_id = self.copy_repo.start_copy_job(
                     source_recovery_point_arn=operation.source_recovery_point_arn,
@@ -406,11 +410,9 @@ class CopyService:
                     if shutdown_check and shutdown_check():
                         if progress_callback:
                             with completed_lock:
-                                progress_callback(
-                                    f"Worker {threading.current_thread().name}: Shutdown requested during polling",
-                                    completed_count,
-                                    total,
-                                )
+                                worker = threading.current_thread().name
+                                msg = f"Worker {worker}: Shutdown requested during polling"
+                                progress_callback(msg, completed_count, total)
                         break
 
                     time.sleep(poll_interval)
@@ -422,35 +424,31 @@ class CopyService:
                         with completed_lock:
                             completed_count += 1
                             if progress_callback:
-                                progress_callback(
-                                    f"Worker {threading.current_thread().name}: Completed ({completed_count}/{total})",
-                                    completed_count,
-                                    total,
-                                )
+                                worker = threading.current_thread().name
+                                msg = f"Worker {worker}: Completed ({completed_count}/{total})"
+                                progress_callback(msg, completed_count, total)
                         break
                     elif status == "FAILED":
                         operation.fail("Copy job failed")
                         with completed_lock:
                             completed_count += 1
                             if progress_callback:
-                                progress_callback(
-                                    f"Worker {threading.current_thread().name}: Failed ({completed_count}/{total})",
-                                    completed_count,
-                                    total,
-                                )
+                                worker = threading.current_thread().name
+                                msg = f"Worker {worker}: Failed ({completed_count}/{total})"
+                                progress_callback(msg, completed_count, total)
                         break
                     else:
                         # Still running, log progress
                         if progress_callback:
                             with completed_lock:
-                                progress_callback(
-                                    f"Worker {threading.current_thread().name}: Copy in progress ({status})",
-                                    completed_count,
-                                    total,
-                                )
+                                worker = threading.current_thread().name
+                                msg = f"Worker {worker}: Copy in progress ({status})"
+                                progress_callback(msg, completed_count, total)
 
             except Exception as e:
-                error_msg = f"Failed to copy recovery point {operation.source_recovery_point_arn}: {e}"
+                error_msg = (
+                    f"Failed to copy recovery point {operation.source_recovery_point_arn}: {e}"
+                )
                 logger.error(error_msg, exc_info=True)
                 operation.fail(str(e))
                 with completed_lock:
@@ -478,7 +476,9 @@ class CopyService:
             # Wait for completion (or shutdown)
             for future in as_completed(futures):
                 if shutdown_check and shutdown_check():
-                    logger.info("Shutdown requested, waiting for workers to finish current operations...")
+                    logger.info(
+                        "Shutdown requested, waiting for workers to finish current operations..."
+                    )
                     break
 
                 try:

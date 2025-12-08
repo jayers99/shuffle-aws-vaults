@@ -7,8 +7,9 @@ Provides exponential backoff retry decorator for AWS API calls.
 
 import logging
 import time
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 from botocore.exceptions import ClientError
 
@@ -105,7 +106,8 @@ def with_retry(
 
                     # Log the retry attempt
                     logger.warning(
-                        f"Transient error in {func.__name__} (attempt {attempt}/{max_attempts}): {e}. "
+                        f"Transient error in {func.__name__} "
+                        f"(attempt {attempt}/{max_attempts}): {e}. "
                         f"Retrying in {delay:.1f}s..."
                     )
 

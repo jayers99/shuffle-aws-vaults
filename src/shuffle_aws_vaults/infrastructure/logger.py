@@ -7,7 +7,6 @@ Provides structured logging with appropriate levels for CLI and library usage.
 
 import logging
 import sys
-from typing import Optional
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
@@ -63,7 +62,7 @@ def setup_logger(name: str = "shuffle_aws_vaults", verbose: bool = False) -> log
 def log_operation(
     logger: logging.Logger,
     operation: str,
-    details: Optional[dict[str, any]] = None,
+    details: dict[str, any] | None = None,
     level: int = logging.INFO,
 ) -> None:
     """Log an operation with structured details.

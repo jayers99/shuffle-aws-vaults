@@ -72,9 +72,7 @@ class MetadataEnrichmentService:
         # Create new RecoveryPoint with enriched metadata (immutable)
         return replace(recovery_point, metadata=metadata)
 
-    def enrich_recovery_points(
-        self, recovery_points: list[RecoveryPoint]
-    ) -> list[RecoveryPoint]:
+    def enrich_recovery_points(self, recovery_points: list[RecoveryPoint]) -> list[RecoveryPoint]:
         """Enrich multiple recovery points with metadata.
 
         Args:
@@ -85,9 +83,7 @@ class MetadataEnrichmentService:
         """
         return [self.enrich_recovery_point(rp) for rp in recovery_points]
 
-    def get_enrichment_stats(
-        self, recovery_points: list[RecoveryPoint]
-    ) -> dict[str, int]:
+    def get_enrichment_stats(self, recovery_points: list[RecoveryPoint]) -> dict[str, int]:
         """Get statistics about metadata enrichment.
 
         Args:

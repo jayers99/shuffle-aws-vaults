@@ -6,8 +6,7 @@ Represents the state of migration operations for resumability.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
@@ -61,7 +60,7 @@ class InventoryState:
     recovery_points: list[RecoveryPointRef] = field(default_factory=list)
     total_count: int = 0
     total_size_bytes: int = 0
-    timestamp: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
 
     def add_recovery_point(self, ref: RecoveryPointRef) -> None:
         """Add a recovery point to the inventory.
@@ -90,9 +89,9 @@ class CopyOperation:
     recovery_point_arn: str
     resource_arn: str
     status: str = "pending"
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
 
 
 @dataclass
@@ -113,7 +112,7 @@ class CopyState:
     vault_name: str
     operations: list[CopyOperation] = field(default_factory=list)
     schema_version: str = "1.0"
-    timestamp: datetime = field(default_factory=lambda: datetime.now(tz=timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(tz=UTC))
 
     def add_operation(self, operation: CopyOperation) -> None:
         """Add a copy operation to the state.
@@ -123,7 +122,7 @@ class CopyState:
         """
         self.operations.append(operation)
 
-    def get_operation(self, recovery_point_arn: str) -> Optional[CopyOperation]:
+    def get_operation(self, recovery_point_arn: str) -> CopyOperation | None:
         """Get a copy operation by recovery point ARN.
 
         Args:
@@ -170,9 +169,7 @@ class CopyState:
         Returns:
             True if all operations are completed or skipped
         """
-        return all(
-            op.status in ["completed", "skipped", "failed"] for op in self.operations
-        )
+        return all(op.status in ["completed", "skipped", "failed"] for op in self.operations)
 
 
 if __name__ == "__main__":

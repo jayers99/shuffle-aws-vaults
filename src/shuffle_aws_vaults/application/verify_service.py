@@ -5,6 +5,7 @@ Service for verifying migration results.
 Validates that recovery points were successfully migrated to the destination account.
 """
 
+from dataclasses import dataclass
 from typing import Protocol
 
 from shuffle_aws_vaults.domain.recovery_point import RecoveryPoint
@@ -76,9 +77,7 @@ class VerificationResult:
 class VerifyService:
     """Application service for verification operations."""
 
-    def __init__(
-        self, source_repo: VerifyRepository, dest_repo: VerifyRepository
-    ) -> None:
+    def __init__(self, source_repo: VerifyRepository, dest_repo: VerifyRepository) -> None:
         """Initialize the verify service.
 
         Args:
@@ -138,7 +137,6 @@ class VerifyService:
 
 
 # Import at bottom to avoid circular dependency
-from dataclasses import dataclass
 
 if __name__ == "__main__":
     # Example usage
