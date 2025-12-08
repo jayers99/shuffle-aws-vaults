@@ -184,6 +184,12 @@ def create_parser() -> argparse.ArgumentParser:
         metavar="1-100",
         help="Number of concurrent worker threads (1-100, default: 1 for single-threaded)",
     )
+    copy_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output (show per-item progress)",
+    )
 
     # verify command
     verify_parser = subparsers.add_parser(
@@ -559,9 +565,23 @@ def cmd_copy(args: argparse.Namespace) -> int:
         if not copy_state.vault_name:
             copy_state.vault_name = args.vault
 
-        # Progress callback for logging
+        # Create progress tracker
+        from shuffle_aws_vaults.infrastructure.progress_tracker import ProgressTracker
+
+        progress_tracker = ProgressTracker(
+            total=len(recovery_points),
+            verbose=args.verbose,
+            refresh_interval=5.0,
+        )
+
+        # Progress callback integrates with ProgressTracker
         def progress_callback(message: str, current: int, total: int) -> None:
-            logger.info(f"[{current}/{total}] {message}")
+            # Update progress tracker counts
+            progress_tracker.update(completed=current, errors=progress_tracker.errors)
+
+            # In verbose mode, log the message separately (don't double-increment)
+            if args.verbose:
+                logger.info(message)
 
         # Execute copy operation
         if args.workers > 1:
@@ -586,13 +606,27 @@ def cmd_copy(args: argparse.Namespace) -> int:
                 poll_interval=args.poll_interval,
             )
 
-        # Display summary
-        logger.info("\nCopy operation completed:")
-        logger.info(f"  Total: {len(batch.operations)}")
-        logger.info(f"  Completed: {sum(1 for op in batch.operations if op.status.value == 'completed')}")
-        logger.info(f"  Failed: {sum(1 for op in batch.operations if op.status.value == 'failed')}")
-        logger.info(f"  Skipped: {sum(1 for op in batch.operations if op.status.value == 'skipped')}")
-        logger.info(f"  In Progress: {sum(1 for op in batch.operations if op.status.value == 'in_progress')}")
+        # Finish progress tracking and display final summary
+        completed_count = sum(1 for op in batch.operations if op.status.value == "completed")
+        failed_count = sum(1 for op in batch.operations if op.status.value == "failed")
+        skipped_count = sum(1 for op in batch.operations if op.status.value == "skipped")
+        in_progress_count = sum(1 for op in batch.operations if op.status.value == "in_progress")
+
+        # Update final counts
+        progress_tracker.update(completed=completed_count, errors=failed_count)
+
+        def final_message() -> str:
+            return (
+                f"\n"
+                f"Copy operation completed:\n"
+                f"  Total: {len(batch.operations)}\n"
+                f"  Completed: {completed_count}\n"
+                f"  Failed: {failed_count}\n"
+                f"  Skipped: {skipped_count}\n"
+                f"  In Progress: {in_progress_count}"
+            )
+
+        progress_tracker.finish(final_message)
 
         # Save final state
         save_state_on_shutdown()
