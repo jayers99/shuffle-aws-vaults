@@ -195,3 +195,52 @@ def test_list_recovery_points_handles_missing_fields() -> None:
         assert recovery_points[0].status == "UNKNOWN"  # Default value
         assert recovery_points[0].size_bytes == 0  # Default value
         assert recovery_points[0].backup_job_id == ""  # Default value
+
+
+def test_start_copy_job() -> None:
+    """Test starting a copy job."""
+    # Arrange
+    repo = AWSBackupRepository(account_id="123456789012")
+
+    # Mock boto3 client
+    mock_client = Mock()
+    mock_client.start_copy_job.return_value = {"CopyJobId": "copy-job-123"}
+
+    with patch.object(repo, "_get_backup_client", return_value=mock_client):
+        # Act
+        copy_job_id = repo.start_copy_job(
+            source_recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-1",
+            source_vault_name="source-vault",
+            dest_vault_name="dest-vault",
+            dest_account_id="222222222222",
+            region="us-east-1",
+        )
+
+        # Assert
+        assert copy_job_id == "copy-job-123"
+        mock_client.start_copy_job.assert_called_once_with(
+            RecoveryPointArn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-1",
+            SourceBackupVaultName="source-vault",
+            DestinationBackupVaultArn="arn:aws:backup:us-east-1:222222222222:backup-vault:dest-vault",
+            IamRoleArn="arn:aws:iam::123456789012:role/service-role/AWSBackupDefaultServiceRole",
+        )
+
+
+def test_get_copy_job_status() -> None:
+    """Test getting copy job status."""
+    # Arrange
+    repo = AWSBackupRepository(account_id="123456789012")
+
+    # Mock boto3 client
+    mock_client = Mock()
+    mock_client.describe_copy_job.return_value = {
+        "CopyJob": {"State": "COMPLETED"}
+    }
+
+    with patch.object(repo, "_get_backup_client", return_value=mock_client):
+        # Act
+        status = repo.get_copy_job_status("copy-job-123", "us-east-1")
+
+        # Assert
+        assert status == "COMPLETED"
+        mock_client.describe_copy_job.assert_called_once_with(CopyJobId="copy-job-123")
