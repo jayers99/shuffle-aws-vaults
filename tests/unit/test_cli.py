@@ -164,3 +164,81 @@ def test_parser_verbose_flag() -> None:
     ])
 
     assert args.verbose is True
+
+
+def test_parser_copy_command_with_workers() -> None:
+    """Test copy command with workers flag."""
+    parser = create_parser()
+    args = parser.parse_args([
+        "copy",
+        "--source-account", "111111111111",
+        "--dest-account", "222222222222",
+        "--vault", "test-vault",
+        "--workers", "10",
+    ])
+
+    assert args.workers == 10
+
+
+def test_parser_copy_command_with_max_runtime() -> None:
+    """Test copy command with max-runtime-minutes flag."""
+    parser = create_parser()
+    args = parser.parse_args([
+        "copy",
+        "--source-account", "111111111111",
+        "--dest-account", "222222222222",
+        "--vault", "test-vault",
+        "--max-runtime-minutes", "120",
+    ])
+
+    assert args.max_runtime_minutes == 120
+
+
+def test_parser_copy_command_workers_validation() -> None:
+    """Test that workers flag rejects invalid values."""
+    parser = create_parser()
+
+    # Test zero workers (invalid)
+    with pytest.raises(SystemExit):
+        parser.parse_args([
+            "copy",
+            "--source-account", "111111111111",
+            "--dest-account", "222222222222",
+            "--vault", "test-vault",
+            "--workers", "0",
+        ])
+
+    # Test negative workers (invalid)
+    with pytest.raises(SystemExit):
+        parser.parse_args([
+            "copy",
+            "--source-account", "111111111111",
+            "--dest-account", "222222222222",
+            "--vault", "test-vault",
+            "--workers", "-5",
+        ])
+
+
+def test_parser_copy_command_max_runtime_validation() -> None:
+    """Test that max-runtime-minutes flag rejects invalid values."""
+    parser = create_parser()
+
+    # Test zero minutes (invalid)
+    with pytest.raises(SystemExit):
+        parser.parse_args([
+            "copy",
+            "--source-account", "111111111111",
+            "--dest-account", "222222222222",
+            "--vault", "test-vault",
+            "--max-runtime-minutes", "0",
+        ])
+
+    # Test negative minutes (invalid)
+    with pytest.raises(SystemExit):
+        parser.parse_args([
+            "copy",
+            "--source-account", "111111111111",
+            "--dest-account", "222222222222",
+            "--vault", "test-vault",
+            "--max-runtime-minutes", "-30",
+        ])

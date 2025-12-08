@@ -187,7 +187,9 @@ def create_parser() -> argparse.ArgumentParser:
     copy_parser.add_argument(
         "--max-runtime-minutes",
         type=int,
-        help="Maximum runtime in minutes (exits gracefully when limit reached)",
+        choices=range(1, 10001),
+        metavar="1-10000",
+        help="Maximum runtime in minutes (1-10000, exits gracefully when limit reached)",
     )
     copy_parser.add_argument(
         "-v",
@@ -650,13 +652,14 @@ def cmd_copy(args: argparse.Namespace) -> int:
         save_state_on_shutdown()
 
         # Determine exit code
+        # Exit code 0 if all completed successfully (even if runtime limit reached)
         # Exit code 2 if incomplete due to runtime limit or shutdown
-        # Exit code 0 if all completed successfully
-        if progress_tracker.is_runtime_limit_exceeded() or shutdown_coordinator.is_shutdown_requested():
+        # Exit code 1 if failures occurred
+        if completed_count == len(batch.operations):
+            return 0
+        elif progress_tracker.is_runtime_limit_exceeded() or shutdown_coordinator.is_shutdown_requested():
             logger.info("Copy operation incomplete - state saved for resume")
             return 2
-        elif completed_count == len(batch.operations):
-            return 0
         else:
             # Some operations failed or still in progress
             return 0 if failed_count == 0 else 1
