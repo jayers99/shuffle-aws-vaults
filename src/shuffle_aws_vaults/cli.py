@@ -151,6 +151,21 @@ def create_parser() -> argparse.ArgumentParser:
         default=10,
         help="Number of recovery points to copy in parallel (default: 10)",
     )
+    copy_parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from saved state (default behavior if state file exists)",
+    )
+    copy_parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Ignore existing state and start fresh",
+    )
+    copy_parser.add_argument(
+        "--state-file",
+        default=".shuffle-state.json",
+        help="Path to state file (default: .shuffle-state.json)",
+    )
 
     # verify command
     verify_parser = subparsers.add_parser(
@@ -404,16 +419,105 @@ def cmd_copy(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 for success)
     """
-    print(f"Copying recovery points:")
-    print(f"  Source: {args.source_account}")
-    print(f"  Destination: {args.dest_account}")
-    print(f"  Batch size: {args.batch_size}")
+    from shuffle_aws_vaults.domain.state import CopyState
+    from shuffle_aws_vaults.infrastructure.signal_handler import ShutdownCoordinator
+    from shuffle_aws_vaults.infrastructure.state_repository import StateRepository
+
+    logger = setup_logger(verbose=args.verbose)
+
+    # Validate flags
+    if args.resume and args.reset:
+        logger.error("Cannot use --resume and --reset together")
+        return 1
+
+    # Initialize state repository
+    state_repo = StateRepository(args.state_file)
+
+    # Setup shutdown coordinator
+    shutdown_coordinator = ShutdownCoordinator()
+
+    # Load or create state
+    copy_state: CopyState | None = None
+
+    if args.reset:
+        logger.info(f"Resetting state, ignoring existing state file: {args.state_file}")
+        # Delete existing state
+        state_repo.delete_state()
+        copy_state = None
+    else:
+        # Try to load existing state (resume is default behavior)
+        try:
+            copy_state = state_repo.load_copy_state()
+            if copy_state:
+                logger.info(f"Resuming from state file: {args.state_file}")
+                logger.info(
+                    f"Found {len(copy_state.operations)} operations "
+                    f"({copy_state.count_by_status('completed')} completed, "
+                    f"{copy_state.count_by_status('pending')} pending, "
+                    f"{copy_state.count_by_status('failed')} failed)"
+                )
+            else:
+                logger.info("No existing state found, starting fresh")
+        except ValueError as e:
+            logger.error(f"Failed to load state: {e}")
+            logger.info("Use --reset to start fresh")
+            return 1
+
+    # If no state exists, create new state
+    if copy_state is None:
+        copy_state = CopyState(
+            source_account=args.source_account,
+            dest_account=args.dest_account,
+            vault_name="",  # Will be set when we know the vault
+        )
+        logger.info("Starting new copy operation")
+
+    # Register shutdown callback to save state
+    def save_state_on_shutdown():
+        logger.info(f"Saving state to {args.state_file}...")
+        state_repo.save_copy_state(copy_state)
+        logger.info("State saved successfully")
+
+    shutdown_coordinator.register_shutdown_callback(save_state_on_shutdown)
+    shutdown_coordinator.setup_signal_handlers()
+
+    logger.info(f"Copying recovery points:")
+    logger.info(f"  Source: {args.source_account}")
+    logger.info(f"  Destination: {args.dest_account}")
+    logger.info(f"  Batch size: {args.batch_size}")
+    logger.info(f"  State file: {args.state_file}")
+
     if args.config:
-        print(f"  Filter config: {args.config}")
+        logger.info(f"  Filter config: {args.config}")
+
     if args.dry_run:
-        print("  [DRY RUN]")
-    # TODO: Implement actual copy logic
-    return 0
+        logger.info("  [DRY RUN]")
+        return 0
+
+    try:
+        # TODO: Implement actual copy logic here
+        # For now, just save the state
+        logger.info("Copy operation not yet implemented")
+
+        # Save final state
+        save_state_on_shutdown()
+
+        return 0
+
+    except Exception as e:
+        logger.error(f"Error during copy: {e}")
+        if args.verbose:
+            import traceback
+
+            traceback.print_exc()
+
+        # Save state on error
+        save_state_on_shutdown()
+
+        return 1
+    finally:
+        # Restore signal handlers
+        shutdown_coordinator.restore_signal_handlers()
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
