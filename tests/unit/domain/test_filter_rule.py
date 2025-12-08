@@ -120,3 +120,98 @@ def test_filter_rule_set_empty() -> None:
     )
 
     assert rule_set.should_include(rp) is True
+
+
+def test_filter_rule_apmid_in_set_match() -> None:
+    """Test filtering by APMID when value is in allowed set."""
+    rp = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-1",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-1",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-1",
+        metadata={"APMID": "APP001", "Environment": "Production"},
+    )
+
+    rule = FilterRule(FilterCriteria.APMID_IN_SET, "APP001,APP002,APP003", include=True)
+    assert rule.matches(rp) is True
+
+
+def test_filter_rule_apmid_in_set_no_match() -> None:
+    """Test filtering by APMID when value is not in allowed set."""
+    rp = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-2",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-2",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-2",
+        metadata={"APMID": "APP999", "Environment": "Production"},
+    )
+
+    rule = FilterRule(FilterCriteria.APMID_IN_SET, "APP001,APP002,APP003", include=True)
+    assert rule.matches(rp) is False
+
+
+def test_filter_rule_apmid_missing_metadata() -> None:
+    """Test filtering by APMID when recovery point has no APMID metadata."""
+    rp = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-3",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-3",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-3",
+        metadata={"Environment": "Production"},  # No APMID
+    )
+
+    rule = FilterRule(FilterCriteria.APMID_IN_SET, "APP001,APP002", include=True)
+    assert rule.matches(rp) is False  # Missing APMID should not match
+
+
+def test_filter_rule_apmid_no_metadata() -> None:
+    """Test filtering by APMID when recovery point has no metadata at all."""
+    rp = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-4",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-4",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-4",
+    )
+
+    rule = FilterRule(FilterCriteria.APMID_IN_SET, "APP001,APP002", include=True)
+    assert rule.matches(rp) is False  # No metadata should not match
+
+
+def test_filter_rule_apmid_whitespace_handling() -> None:
+    """Test APMID filtering handles whitespace in comma-separated list."""
+    rp = RecoveryPoint(
+        recovery_point_arn="arn:aws:backup:us-east-1:123456789012:recovery-point:rp-5",
+        backup_vault_name="test-vault",
+        resource_arn="arn:aws:ec2:us-east-1:123456789012:volume/vol-5",
+        resource_type="EBS",
+        creation_date=datetime.now(tz=timezone.utc),
+        completion_date=datetime.now(tz=timezone.utc),
+        status="COMPLETED",
+        size_bytes=10 * 1024**3,
+        backup_job_id="job-5",
+        metadata={"APMID": "APP002"},
+    )
+
+    # Test with extra whitespace around APMIDs
+    rule = FilterRule(FilterCriteria.APMID_IN_SET, "APP001, APP002 , APP003", include=True)
+    assert rule.matches(rp) is True
