@@ -12,7 +12,11 @@ import sys
 from typing import NoReturn
 
 from shuffle_aws_vaults.application.list_service import ListService
+from shuffle_aws_vaults.application.metadata_enrichment_service import (
+    MetadataEnrichmentService,
+)
 from shuffle_aws_vaults.infrastructure.aws_backup_repository import AWSBackupRepository
+from shuffle_aws_vaults.infrastructure.csv_metadata_repository import CSVMetadataRepository
 from shuffle_aws_vaults.infrastructure.logger import setup_logger
 
 __version__ = "0.1.0"
@@ -92,6 +96,10 @@ def create_parser() -> argparse.ArgumentParser:
     list_parser.add_argument(
         "--vault",
         help="Specific vault name (optional, lists all if not specified)",
+    )
+    list_parser.add_argument(
+        "--metadata-csv",
+        help="Path to CSV file with metadata (keyed by resourceArn)",
     )
 
     # filter command
@@ -186,6 +194,19 @@ def cmd_list(args: argparse.Namespace) -> int:
                 args.vault, args.region
             )
 
+            # Enrich with CSV metadata if provided
+            if args.metadata_csv:
+                logger.info(f"Loading metadata from {args.metadata_csv}")
+                csv_repo = CSVMetadataRepository(args.metadata_csv)
+                enrichment_service = MetadataEnrichmentService(csv_repo)
+                recovery_points = enrichment_service.enrich_recovery_points(recovery_points)
+
+                stats = enrichment_service.get_enrichment_stats(recovery_points)
+                logger.info(
+                    f"Enriched {stats['enriched_count']}/{stats['total_count']} recovery points "
+                    f"({stats['missing_count']} missing metadata)"
+                )
+
             logger.info(f"Found {len(recovery_points)} recovery points")
 
             # Display recovery points
@@ -199,6 +220,7 @@ def cmd_list(args: argparse.Namespace) -> int:
                         "creation_date": rp.creation_date.isoformat(),
                         "status": rp.status,
                         "size_gb": rp.size_gb(),
+                        "metadata": rp.metadata if rp.metadata else None,
                     }
                     for rp in recovery_points
                 ]
@@ -212,6 +234,10 @@ def cmd_list(args: argparse.Namespace) -> int:
                     print(f"  Created: {rp.creation_date}")
                     print(f"  Status: {rp.status}")
                     print(f"  Size: {rp.size_gb()} GB")
+                    if rp.metadata:
+                        print(f"  Metadata:")
+                        for key, value in rp.metadata.items():
+                            print(f"    {key}: {value}")
                     print()
         else:
             # List all vaults
