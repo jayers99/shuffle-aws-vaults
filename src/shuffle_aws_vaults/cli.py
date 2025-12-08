@@ -7,8 +7,13 @@ with filtering and progress tracking capabilities.
 """
 
 import argparse
+import json
 import sys
 from typing import NoReturn
+
+from shuffle_aws_vaults.application.list_service import ListService
+from shuffle_aws_vaults.infrastructure.aws_backup_repository import AWSBackupRepository
+from shuffle_aws_vaults.infrastructure.logger import setup_logger
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
@@ -63,6 +68,13 @@ def create_parser() -> argparse.ArgumentParser:
         "-v", "--verbose",
         action="store_true",
         help="Enable verbose output",
+    )
+
+    parser.add_argument(
+        "--output",
+        choices=["text", "json"],
+        default="text",
+        help="Output format (default: text)",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -152,13 +164,106 @@ def cmd_list(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 for success)
     """
-    print(f"Listing vaults in account {args.source_account} (region: {args.region})")
+    logger = setup_logger(verbose=args.verbose)
+
+    logger.info(f"Listing vaults in account {args.source_account} (region: {args.region})")
     if args.vault:
-        print(f"  Filtering for vault: {args.vault}")
+        logger.info(f"  Filtering for vault: {args.vault}")
     if args.dry_run:
-        print("  [DRY RUN]")
-    # TODO: Implement actual listing logic
-    return 0
+        logger.info("  [DRY RUN]")
+        return 0
+
+    try:
+        # Create repository and service
+        backup_repo = AWSBackupRepository(account_id=args.source_account)
+        list_service = ListService(backup_repo, dry_run=args.dry_run)
+
+        # List vaults
+        if args.vault:
+            # List recovery points for specific vault
+            logger.info(f"Listing recovery points in vault: {args.vault}")
+            recovery_points = list_service.list_vault_recovery_points(
+                args.vault, args.region
+            )
+
+            logger.info(f"Found {len(recovery_points)} recovery points")
+
+            # Display recovery points
+            if args.output == "json":
+                output_data = [
+                    {
+                        "recovery_point_arn": rp.recovery_point_arn,
+                        "vault_name": rp.backup_vault_name,
+                        "resource_arn": rp.resource_arn,
+                        "resource_type": rp.resource_type,
+                        "creation_date": rp.creation_date.isoformat(),
+                        "status": rp.status,
+                        "size_gb": rp.size_gb(),
+                    }
+                    for rp in recovery_points
+                ]
+                print(json.dumps(output_data, indent=2))
+            else:
+                for rp in recovery_points:
+                    print(f"Recovery Point: {rp.recovery_point_arn}")
+                    print(f"  Vault: {rp.backup_vault_name}")
+                    print(f"  Resource: {rp.resource_arn}")
+                    print(f"  Type: {rp.resource_type}")
+                    print(f"  Created: {rp.creation_date}")
+                    print(f"  Status: {rp.status}")
+                    print(f"  Size: {rp.size_gb()} GB")
+                    print()
+        else:
+            # List all vaults
+            logger.info("Listing all vaults...")
+            vaults = list_service.list_all_vaults(args.region)
+
+            logger.info(f"Found {len(vaults)} vaults")
+
+            # Display vaults
+            if args.output == "json":
+                summary = list_service.get_vault_summary(args.region)
+                output_data = {
+                    "vaults": [
+                        {
+                            "name": vault.name,
+                            "arn": vault.arn,
+                            "region": vault.region,
+                            "recovery_point_count": vault.recovery_point_count,
+                            "encrypted": vault.is_encrypted(),
+                            "encryption_key_arn": vault.encryption_key_arn,
+                        }
+                        for vault in vaults
+                    ],
+                    "summary": summary,
+                }
+                print(json.dumps(output_data, indent=2))
+            else:
+                for vault in vaults:
+                    print(f"Vault: {vault.name}")
+                    print(f"  ARN: {vault.arn}")
+                    print(f"  Region: {vault.region}")
+                    print(f"  Recovery Points: {vault.recovery_point_count}")
+                    if vault.is_encrypted():
+                        print(f"  Encryption: {vault.encryption_key_arn}")
+                    print()
+
+                # Display summary
+                summary = list_service.get_vault_summary(args.region)
+                print("Summary:")
+                print(f"  Total Vaults: {summary['vault_count']}")
+                print(f"  Total Recovery Points: {summary['total_recovery_points']}")
+                print(f"  Encrypted Vaults: {summary['encrypted_vaults']}")
+                print(f"  Empty Vaults: {summary['empty_vaults']}")
+
+        return 0
+
+    except Exception as e:
+        logger.error(f"Error listing vaults: {e}")
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        return 1
 
 
 def cmd_filter(args: argparse.Namespace) -> int:
