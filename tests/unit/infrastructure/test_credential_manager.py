@@ -280,6 +280,7 @@ def test_thread_safe_credential_refresh() -> None:
     manager = CredentialManager()
 
     refresh_count = 0
+    refresh_lock = threading.Lock()
     worker_calls = []
     errors = []
 
@@ -291,10 +292,11 @@ def test_thread_safe_credential_refresh() -> None:
     def mock_operation():
         """Simulates an operation that might hit credential errors."""
         nonlocal refresh_count
-        # First call fails, second succeeds
-        if refresh_count == 0:
-            refresh_count += 1
-            raise error
+        with refresh_lock:
+            # First call fails, second succeeds
+            if refresh_count == 0:
+                refresh_count += 1
+                raise error
         return "success"
 
     @manager.with_retry

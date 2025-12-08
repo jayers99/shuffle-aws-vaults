@@ -363,6 +363,10 @@ class CopyService:
         def process_copy_operation(idx: int, operation: CopyOperation) -> tuple[int, CopyOperation]:
             """Process a single copy operation (submit + poll).
 
+            Thread Safety: Each worker processes a unique operation (by index).
+            No two workers access the same CopyOperation instance, so no
+            synchronization is needed at the operation level.
+
             Returns:
                 Tuple of (index, updated operation)
             """

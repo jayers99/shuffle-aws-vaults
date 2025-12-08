@@ -77,7 +77,7 @@ def test_copy_multithreaded_with_workers(mock_copy_repo, sample_recovery_points)
 
     mock_copy_repo.start_copy_job.side_effect = track_threads
 
-    batch = service.copy_multithreaded(
+    service.copy_multithreaded(
         recovery_points=sample_recovery_points,
         dest_account_id="999999999999",
         region="us-east-1",
@@ -192,10 +192,12 @@ def test_copy_multithreaded_shutdown_handling(mock_copy_repo, sample_recovery_po
         poll_interval=0.05,
     )
 
-    # Some operations should be incomplete due to shutdown
-    # Not all operations should have completed
+    # Shutdown should have been triggered
+    assert shutdown_requested is True
+
+    # At least some operations should not have completed
     in_progress = [op for op in batch.operations if op.status == MigrationStatus.IN_PROGRESS]
-    assert len(in_progress) > 0 or shutdown_requested
+    assert len(in_progress) > 0 or not batch.is_complete()
 
 
 def test_copy_multithreaded_dry_run(mock_copy_repo, sample_recovery_points):
@@ -226,7 +228,7 @@ def test_copy_multithreaded_progress_callback(mock_copy_repo, sample_recovery_po
     def track_progress(message: str, current: int, total: int):
         progress_calls.append((message, current, total))
 
-    batch = service.copy_multithreaded(
+    service.copy_multithreaded(
         recovery_points=sample_recovery_points,
         dest_account_id="999999999999",
         region="us-east-1",

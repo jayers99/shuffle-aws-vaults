@@ -180,7 +180,9 @@ def create_parser() -> argparse.ArgumentParser:
         "--workers",
         type=int,
         default=1,
-        help="Number of concurrent worker threads (default: 1 for single-threaded)",
+        choices=range(1, 101),
+        metavar="1-100",
+        help="Number of concurrent worker threads (1-100, default: 1 for single-threaded)",
     )
 
     # verify command

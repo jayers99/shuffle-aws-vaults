@@ -42,6 +42,13 @@ class CredentialManager:
     """Manages AWS credentials and handles expiration scenarios.
 
     This class is thread-safe for use in multi-threaded environments.
+
+    Lock Ordering:
+        To avoid deadlocks, locks must always be acquired in this order:
+        1. _refresh_lock (global credential refresh)
+        2. _session_lock (session dictionary access)
+
+        Never acquire _refresh_lock while holding _session_lock.
     """
 
     MAX_AUTH_FAILURES = 3
