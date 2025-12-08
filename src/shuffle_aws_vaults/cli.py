@@ -142,14 +142,19 @@ def create_parser() -> argparse.ArgumentParser:
         help="Destination AWS account ID",
     )
     copy_parser.add_argument(
+        "--vault",
+        required=True,
+        help="Vault name to copy recovery points from",
+    )
+    copy_parser.add_argument(
         "--config",
         help="Path to filter configuration file (optional)",
     )
     copy_parser.add_argument(
-        "--batch-size",
+        "--poll-interval",
         type=int,
-        default=10,
-        help="Number of recovery points to copy in parallel (default: 10)",
+        default=30,
+        help="Seconds between copy job status checks (default: 30)",
     )
     copy_parser.add_argument(
         "--resume",
@@ -419,6 +424,7 @@ def cmd_copy(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 for success)
     """
+    from shuffle_aws_vaults.application.copy_service import CopyService
     from shuffle_aws_vaults.domain.state import CopyState
     from shuffle_aws_vaults.infrastructure.signal_handler import ShutdownCoordinator
     from shuffle_aws_vaults.infrastructure.state_repository import StateRepository
@@ -484,7 +490,8 @@ def cmd_copy(args: argparse.Namespace) -> int:
     logger.info(f"Copying recovery points:")
     logger.info(f"  Source: {args.source_account}")
     logger.info(f"  Destination: {args.dest_account}")
-    logger.info(f"  Batch size: {args.batch_size}")
+    logger.info(f"  Vault: {args.vault}")
+    logger.info(f"  Poll interval: {args.poll_interval}s")
     logger.info(f"  State file: {args.state_file}")
 
     if args.config:
@@ -495,9 +502,46 @@ def cmd_copy(args: argparse.Namespace) -> int:
         return 0
 
     try:
-        # TODO: Implement actual copy logic here
-        # For now, just save the state
-        logger.info("Copy operation not yet implemented")
+        # Create repository and services
+        backup_repo = AWSBackupRepository(account_id=args.source_account)
+        list_service = ListService(backup_repo, dry_run=args.dry_run)
+        copy_service = CopyService(copy_repo=backup_repo, dry_run=args.dry_run)
+
+        # List recovery points from vault
+        logger.info(f"Loading recovery points from vault: {args.vault}")
+        recovery_points = list_service.list_vault_recovery_points(args.vault, args.region)
+        logger.info(f"Found {len(recovery_points)} recovery points")
+
+        if len(recovery_points) == 0:
+            logger.info("No recovery points to copy")
+            return 0
+
+        # Update state with vault name if not already set
+        if not copy_state.vault_name:
+            copy_state.vault_name = args.vault
+
+        # Progress callback for logging
+        def progress_callback(message: str, current: int, total: int) -> None:
+            logger.info(f"[{current}/{total}] {message}")
+
+        # Execute copy operation
+        logger.info("Starting copy operation...")
+        batch = copy_service.copy_single_threaded(
+            recovery_points=recovery_points,
+            dest_account_id=args.dest_account,
+            region=args.region,
+            progress_callback=progress_callback,
+            shutdown_check=shutdown_coordinator.is_shutdown_requested,
+            poll_interval=args.poll_interval,
+        )
+
+        # Display summary
+        logger.info("\nCopy operation completed:")
+        logger.info(f"  Total: {len(batch.operations)}")
+        logger.info(f"  Completed: {sum(1 for op in batch.operations if op.status.value == 'completed')}")
+        logger.info(f"  Failed: {sum(1 for op in batch.operations if op.status.value == 'failed')}")
+        logger.info(f"  Skipped: {sum(1 for op in batch.operations if op.status.value == 'skipped')}")
+        logger.info(f"  In Progress: {sum(1 for op in batch.operations if op.status.value == 'in_progress')}")
 
         # Save final state
         save_state_on_shutdown()

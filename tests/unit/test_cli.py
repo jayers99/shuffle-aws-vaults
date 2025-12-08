@@ -80,13 +80,15 @@ def test_parser_copy_command() -> None:
         "copy",
         "--source-account", "111111111111",
         "--dest-account", "222222222222",
-        "--batch-size", "20",
+        "--vault", "test-vault",
+        "--poll-interval", "60",
     ])
 
     assert args.command == "copy"
     assert args.source_account == "111111111111"
     assert args.dest_account == "222222222222"
-    assert args.batch_size == 20
+    assert args.vault == "test-vault"
+    assert args.poll_interval == 60
 
 
 def test_parser_copy_command_with_resume_flags() -> None:
@@ -98,6 +100,7 @@ def test_parser_copy_command_with_resume_flags() -> None:
         "copy",
         "--source-account", "111111111111",
         "--dest-account", "222222222222",
+        "--vault", "test-vault",
         "--resume",
     ])
     assert args_resume.resume is True
@@ -108,6 +111,7 @@ def test_parser_copy_command_with_resume_flags() -> None:
         "copy",
         "--source-account", "111111111111",
         "--dest-account", "222222222222",
+        "--vault", "test-vault",
         "--reset",
     ])
     assert args_reset.resume is False
@@ -118,6 +122,7 @@ def test_parser_copy_command_with_resume_flags() -> None:
         "copy",
         "--source-account", "111111111111",
         "--dest-account", "222222222222",
+        "--vault", "test-vault",
         "--state-file", "/tmp/my-state.json",
     ])
     assert args_state.state_file == "/tmp/my-state.json"
