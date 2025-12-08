@@ -83,6 +83,23 @@ class SummaryReport:
     end_time: datetime
     failures: list[FailureDetail] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        """Validate report data."""
+        if self.total_items < 0:
+            raise ValueError("total_items cannot be negative")
+        if self.completed < 0:
+            raise ValueError("completed cannot be negative")
+        if self.failed < 0:
+            raise ValueError("failed cannot be negative")
+        if self.skipped < 0:
+            raise ValueError("skipped cannot be negative")
+        if self.in_progress < 0:
+            raise ValueError("in_progress cannot be negative")
+        if self.duration_seconds < 0:
+            raise ValueError("duration_seconds cannot be negative")
+        if self.end_time < self.start_time:
+            raise ValueError("end_time cannot be before start_time")
+
     @property
     def success_rate(self) -> float:
         """Calculate success rate percentage.
@@ -95,14 +112,14 @@ class SummaryReport:
         return (self.completed / self.total_items) * 100
 
     @property
-    def throughput_per_hour(self) -> float:
+    def throughput_per_hour(self) -> float | None:
         """Calculate throughput in items per hour.
 
         Returns:
-            Items per hour, or 0 if duration is too short
+            Items per hour, or None if duration is too short (< 1 second)
         """
         if self.duration_seconds < 1.0:
-            return 0.0
+            return None
         items_per_second = self.completed / self.duration_seconds
         return items_per_second * 3600
 
@@ -142,7 +159,7 @@ class SummaryReport:
             "start_time": self.start_time.isoformat(),
             "end_time": self.end_time.isoformat(),
             "success_rate": round(self.success_rate, 2),
-            "throughput_per_hour": round(self.throughput_per_hour, 2),
+            "throughput_per_hour": round(self.throughput_per_hour, 2) if self.throughput_per_hour is not None else None,
             "failures": [f.to_dict() for f in self.failures],
         }
 
@@ -164,6 +181,7 @@ class SummaryReport:
             file_path: Path to save the JSON file
         """
         path = Path(file_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(self.to_json())
 
     def format_console_summary(self) -> str:
@@ -184,7 +202,7 @@ class SummaryReport:
             "",
             f"Success Rate:     {self.success_rate:.1f}%",
             f"Duration:         {self.format_duration()}",
-            f"Throughput:       {self.throughput_per_hour:.1f} items/hour",
+            f"Throughput:       {self.throughput_per_hour:.1f} items/hour" if self.throughput_per_hour is not None else "Throughput:       N/A (duration too short)",
             "",
             f"Started:          {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}",
             f"Ended:            {self.end_time.strftime('%Y-%m-%d %H:%M:%S')}",

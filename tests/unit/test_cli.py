@@ -242,3 +242,17 @@ def test_parser_copy_command_max_runtime_validation() -> None:
             "--vault", "test-vault",
             "--max-runtime-minutes", "-30",
         ])
+
+
+def test_parser_copy_command_with_summary_output() -> None:
+    """Test copy command with summary output flag."""
+    parser = create_parser()
+    args = parser.parse_args([
+        "copy",
+        "--source-account", "111111111111",
+        "--dest-account", "222222222222",
+        "--vault", "test-vault",
+        "--summary-output", "/path/to/summary.json",
+    ])
+
+    assert args.summary_output == "/path/to/summary.json"

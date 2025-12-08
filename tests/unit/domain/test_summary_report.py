@@ -4,8 +4,6 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import pytest
-
 from shuffle_aws_vaults.domain.summary_report import FailureDetail, SummaryReport
 
 
@@ -146,7 +144,7 @@ def test_summary_report_throughput_short_duration() -> None:
         end_time=end,
     )
 
-    assert report.throughput_per_hour == 0.0
+    assert report.throughput_per_hour is None
 
 
 def test_summary_report_format_duration() -> None:

@@ -9,12 +9,14 @@ with filtering and progress tracking capabilities.
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from typing import NoReturn
 
 from shuffle_aws_vaults.application.list_service import ListService
 from shuffle_aws_vaults.application.metadata_enrichment_service import (
     MetadataEnrichmentService,
 )
+from shuffle_aws_vaults.domain.summary_report import FailureDetail, SummaryReport
 from shuffle_aws_vaults.infrastructure.aws_backup_repository import AWSBackupRepository
 from shuffle_aws_vaults.infrastructure.csv_metadata_repository import CSVMetadataRepository
 from shuffle_aws_vaults.infrastructure.logger import setup_logger
@@ -641,11 +643,7 @@ def cmd_copy(args: argparse.Namespace) -> int:
         progress_tracker.finish()
 
         # Generate summary report
-        from datetime import datetime
-
-        from shuffle_aws_vaults.domain.summary_report import FailureDetail, SummaryReport
-
-        end_time = datetime.now()
+        end_time = datetime.now(timezone.utc)
         duration = end_time.timestamp() - progress_tracker.start_time
 
         # Collect failure details
@@ -666,7 +664,7 @@ def cmd_copy(args: argparse.Namespace) -> int:
             skipped=skipped_count,
             in_progress=in_progress_count,
             duration_seconds=duration,
-            start_time=datetime.fromtimestamp(progress_tracker.start_time),
+            start_time=datetime.fromtimestamp(progress_tracker.start_time, tz=timezone.utc),
             end_time=end_time,
             failures=failures,
         )
@@ -676,8 +674,11 @@ def cmd_copy(args: argparse.Namespace) -> int:
 
         # Save summary to JSON file if requested
         if args.summary_output:
-            summary_report.save_to_file(args.summary_output)
-            logger.info(f"Summary report saved to: {args.summary_output}")
+            try:
+                summary_report.save_to_file(args.summary_output)
+                logger.info(f"Summary report saved to: {args.summary_output}")
+            except Exception as e:
+                logger.error(f"Failed to save summary report: {e}")
 
         # Save final state
         save_state_on_shutdown()
