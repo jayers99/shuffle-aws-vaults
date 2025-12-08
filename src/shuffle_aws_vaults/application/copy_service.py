@@ -5,7 +5,8 @@ Service for copying recovery points.
 Orchestrates the migration of recovery points from source to destination account.
 """
 
-from typing import Protocol
+import time
+from typing import Callable, Protocol
 
 from shuffle_aws_vaults.domain.migration_result import CopyOperation, MigrationBatch, MigrationStatus
 from shuffle_aws_vaults.domain.recovery_point import RecoveryPoint
@@ -188,6 +189,124 @@ class CopyService:
                     operation.fail("Copy job failed")
             except Exception as e:
                 operation.fail(f"Failed to check status: {e}")
+
+        if batch.is_complete():
+            batch.complete()
+
+        return batch
+
+    def copy_single_threaded(
+        self,
+        recovery_points: list[RecoveryPoint],
+        dest_account_id: str,
+        region: str,
+        progress_callback: Callable[[str, int, int], None] | None = None,
+        shutdown_check: Callable[[], bool] | None = None,
+        poll_interval: int = 30,
+    ) -> MigrationBatch:
+        """Copy recovery points one at a time with status polling.
+
+        Args:
+            recovery_points: List of recovery points to copy
+            dest_account_id: Destination account ID
+            region: AWS region
+            progress_callback: Optional callback for progress updates (message, current, total)
+            shutdown_check: Optional callback to check if shutdown requested
+            poll_interval: Seconds between status checks (default: 30)
+
+        Returns:
+            MigrationBatch with final results
+        """
+        batch = self.create_copy_batch(recovery_points, dest_account_id, "single-threaded")
+
+        if self.dry_run:
+            for op in batch.operations:
+                if op.status == MigrationStatus.PENDING:
+                    op.skip("Dry run mode")
+            return batch
+
+        batch.start()
+        total = len(batch.operations)
+
+        for idx, operation in enumerate(batch.operations, 1):
+            # Check for shutdown request
+            if shutdown_check and shutdown_check():
+                if progress_callback:
+                    progress_callback("Shutdown requested, stopping copy operations", idx, total)
+                break
+
+            if operation.status != MigrationStatus.PENDING:
+                continue
+
+            # Start copy job
+            try:
+                if progress_callback:
+                    progress_callback(
+                        f"Starting copy for {operation.source_recovery_point_arn}",
+                        idx,
+                        total,
+                    )
+
+                copy_job_id = self.copy_repo.start_copy_job(
+                    source_recovery_point_arn=operation.source_recovery_point_arn,
+                    source_vault_name=operation.source_vault_name,
+                    dest_vault_name=operation.dest_vault_name,
+                    dest_account_id=dest_account_id,
+                    region=region,
+                )
+                operation.start(copy_job_id)
+
+                # Poll for completion
+                while True:
+                    # Check for shutdown request
+                    if shutdown_check and shutdown_check():
+                        if progress_callback:
+                            progress_callback(
+                                "Shutdown requested during polling, will resume later",
+                                idx,
+                                total,
+                            )
+                        break
+
+                    time.sleep(poll_interval)
+
+                    status = self.copy_repo.get_copy_job_status(copy_job_id, region)
+
+                    if status == "COMPLETED":
+                        operation.complete()
+                        if progress_callback:
+                            progress_callback(
+                                f"Completed copy for {operation.source_recovery_point_arn}",
+                                idx,
+                                total,
+                            )
+                        break
+                    elif status == "FAILED":
+                        operation.fail("Copy job failed")
+                        if progress_callback:
+                            progress_callback(
+                                f"Failed copy for {operation.source_recovery_point_arn}",
+                                idx,
+                                total,
+                            )
+                        break
+                    else:
+                        # Still running, continue polling
+                        if progress_callback:
+                            progress_callback(
+                                f"Copy in progress ({status}): {operation.source_recovery_point_arn}",
+                                idx,
+                                total,
+                            )
+
+            except Exception as e:
+                operation.fail(str(e))
+                if progress_callback:
+                    progress_callback(
+                        f"Error copying {operation.source_recovery_point_arn}: {e}",
+                        idx,
+                        total,
+                    )
 
         if batch.is_complete():
             batch.complete()
