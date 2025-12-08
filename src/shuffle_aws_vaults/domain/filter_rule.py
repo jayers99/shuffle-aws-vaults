@@ -65,7 +65,7 @@ class FilterRule:
         Returns:
             True if recovery point matches the criteria
         """
-        match criteria:
+        match self.criteria:
             case FilterCriteria.RESOURCE_TYPE:
                 result = recovery_point.resource_type == self.value
             case FilterCriteria.MIN_AGE_DAYS:
