@@ -33,9 +33,9 @@ def test_parser_list_command() -> None:
     """Test list command parsing."""
     parser = create_parser()
     args = parser.parse_args([
+        "--region", "us-west-2",
         "list",
         "--source-account", "123456789012",
-        "--region", "us-west-2",
     ])
 
     assert args.command == "list"
