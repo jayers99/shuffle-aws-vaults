@@ -6,12 +6,16 @@ Provides atomic file operations for saving and loading migration state.
 """
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from shuffle_aws_vaults.domain.state import CopyOperation, CopyState, InventoryState, RecoveryPointRef
+from shuffle_aws_vaults.domain.state import (
+    CopyOperation,
+    CopyState,
+    InventoryState,
+    RecoveryPointRef,
+)
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
@@ -83,7 +87,7 @@ class StateRepository:
         if not self.state_file_path.exists():
             return None
 
-        with open(self.state_file_path, "r", encoding="utf-8") as f:
+        with open(self.state_file_path, encoding="utf-8") as f:
             state_dict = json.load(f)
 
         # Validate schema version
@@ -132,7 +136,7 @@ class StateRepository:
         if not self.state_file_path.exists():
             return None
 
-        with open(self.state_file_path, "r", encoding="utf-8") as f:
+        with open(self.state_file_path, encoding="utf-8") as f:
             state_dict = json.load(f)
 
         # Deserialize from dict
@@ -186,9 +190,9 @@ class StateRepository:
                 resource_arn=op["resource_arn"],
                 status=op["status"],
                 started_at=datetime.fromisoformat(op["started_at"]) if op["started_at"] else None,
-                completed_at=datetime.fromisoformat(op["completed_at"])
-                if op["completed_at"]
-                else None,
+                completed_at=(
+                    datetime.fromisoformat(op["completed_at"]) if op["completed_at"] else None
+                ),
                 error_message=op.get("error_message"),
             )
             for op in state_dict["operations"]

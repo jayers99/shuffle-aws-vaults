@@ -7,7 +7,7 @@ Coordinates shutdown across operations when SIGINT or SIGTERM is received.
 
 import signal
 import sys
-from typing import Callable, Optional
+from collections.abc import Callable
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
@@ -34,7 +34,7 @@ class ShutdownCoordinator:
     def __init__(self) -> None:
         """Initialize the shutdown coordinator."""
         self._shutdown_requested = False
-        self._shutdown_callback: Optional[Callable[[], None]] = None
+        self._shutdown_callback: Callable[[], None] | None = None
         self._original_sigint_handler = None
         self._original_sigterm_handler = None
 

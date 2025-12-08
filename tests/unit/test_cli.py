@@ -32,11 +32,15 @@ def test_parser_version() -> None:
 def test_parser_list_command() -> None:
     """Test list command parsing."""
     parser = create_parser()
-    args = parser.parse_args([
-        "--region", "us-west-2",
-        "list",
-        "--source-account", "123456789012",
-    ])
+    args = parser.parse_args(
+        [
+            "--region",
+            "us-west-2",
+            "list",
+            "--source-account",
+            "123456789012",
+        ]
+    )
 
     assert args.command == "list"
     assert args.source_account == "123456789012"
@@ -46,11 +50,15 @@ def test_parser_list_command() -> None:
 def test_parser_list_command_with_vault() -> None:
     """Test list command with specific vault."""
     parser = create_parser()
-    args = parser.parse_args([
-        "list",
-        "--source-account", "123456789012",
-        "--vault", "my-vault",
-    ])
+    args = parser.parse_args(
+        [
+            "list",
+            "--source-account",
+            "123456789012",
+            "--vault",
+            "my-vault",
+        ]
+    )
 
     assert args.vault == "my-vault"
 
@@ -58,13 +66,19 @@ def test_parser_list_command_with_vault() -> None:
 def test_parser_filter_command() -> None:
     """Test filter command parsing."""
     parser = create_parser()
-    args = parser.parse_args([
-        "filter",
-        "--source-account", "123456789012",
-        "--vault", "test-vault",
-        "--allowed-apmids", "APP001,APP002",
-        "--metadata-csv", "metadata.csv",
-    ])
+    args = parser.parse_args(
+        [
+            "filter",
+            "--source-account",
+            "123456789012",
+            "--vault",
+            "test-vault",
+            "--allowed-apmids",
+            "APP001,APP002",
+            "--metadata-csv",
+            "metadata.csv",
+        ]
+    )
 
     assert args.command == "filter"
     assert args.source_account == "123456789012"
@@ -76,13 +90,19 @@ def test_parser_filter_command() -> None:
 def test_parser_copy_command() -> None:
     """Test copy command parsing."""
     parser = create_parser()
-    args = parser.parse_args([
-        "copy",
-        "--source-account", "111111111111",
-        "--dest-account", "222222222222",
-        "--vault", "test-vault",
-        "--poll-interval", "60",
-    ])
+    args = parser.parse_args(
+        [
+            "copy",
+            "--source-account",
+            "111111111111",
+            "--dest-account",
+            "222222222222",
+            "--vault",
+            "test-vault",
+            "--poll-interval",
+            "60",
+        ]
+    )
 
     assert args.command == "copy"
     assert args.source_account == "111111111111"
@@ -96,46 +116,66 @@ def test_parser_copy_command_with_resume_flags() -> None:
     parser = create_parser()
 
     # Test with --resume flag
-    args_resume = parser.parse_args([
-        "copy",
-        "--source-account", "111111111111",
-        "--dest-account", "222222222222",
-        "--vault", "test-vault",
-        "--resume",
-    ])
+    args_resume = parser.parse_args(
+        [
+            "copy",
+            "--source-account",
+            "111111111111",
+            "--dest-account",
+            "222222222222",
+            "--vault",
+            "test-vault",
+            "--resume",
+        ]
+    )
     assert args_resume.resume is True
     assert args_resume.reset is False
 
     # Test with --reset flag
-    args_reset = parser.parse_args([
-        "copy",
-        "--source-account", "111111111111",
-        "--dest-account", "222222222222",
-        "--vault", "test-vault",
-        "--reset",
-    ])
+    args_reset = parser.parse_args(
+        [
+            "copy",
+            "--source-account",
+            "111111111111",
+            "--dest-account",
+            "222222222222",
+            "--vault",
+            "test-vault",
+            "--reset",
+        ]
+    )
     assert args_reset.resume is False
     assert args_reset.reset is True
 
     # Test with --state-file
-    args_state = parser.parse_args([
-        "copy",
-        "--source-account", "111111111111",
-        "--dest-account", "222222222222",
-        "--vault", "test-vault",
-        "--state-file", "/tmp/my-state.json",
-    ])
+    args_state = parser.parse_args(
+        [
+            "copy",
+            "--source-account",
+            "111111111111",
+            "--dest-account",
+            "222222222222",
+            "--vault",
+            "test-vault",
+            "--state-file",
+            "/tmp/my-state.json",
+        ]
+    )
     assert args_state.state_file == "/tmp/my-state.json"
 
 
 def test_parser_verify_command() -> None:
     """Test verify command parsing."""
     parser = create_parser()
-    args = parser.parse_args([
-        "verify",
-        "--source-account", "111111111111",
-        "--dest-account", "222222222222",
-    ])
+    args = parser.parse_args(
+        [
+            "verify",
+            "--source-account",
+            "111111111111",
+            "--dest-account",
+            "222222222222",
+        ]
+    )
 
     assert args.command == "verify"
     assert args.source_account == "111111111111"
@@ -145,11 +185,14 @@ def test_parser_verify_command() -> None:
 def test_parser_dry_run_flag() -> None:
     """Test dry-run flag."""
     parser = create_parser()
-    args = parser.parse_args([
-        "--dry-run",
-        "list",
-        "--source-account", "123456789012",
-    ])
+    args = parser.parse_args(
+        [
+            "--dry-run",
+            "list",
+            "--source-account",
+            "123456789012",
+        ]
+    )
 
     assert args.dry_run is True
 
@@ -157,11 +200,14 @@ def test_parser_dry_run_flag() -> None:
 def test_parser_verbose_flag() -> None:
     """Test verbose flag."""
     parser = create_parser()
-    args = parser.parse_args([
-        "-v",
-        "list",
-        "--source-account", "123456789012",
-    ])
+    args = parser.parse_args(
+        [
+            "-v",
+            "list",
+            "--source-account",
+            "123456789012",
+        ]
+    )
 
     assert args.verbose is True
 
@@ -169,13 +215,19 @@ def test_parser_verbose_flag() -> None:
 def test_parser_copy_command_with_workers() -> None:
     """Test copy command with workers flag."""
     parser = create_parser()
-    args = parser.parse_args([
-        "copy",
-        "--source-account", "111111111111",
-        "--dest-account", "222222222222",
-        "--vault", "test-vault",
-        "--workers", "10",
-    ])
+    args = parser.parse_args(
+        [
+            "copy",
+            "--source-account",
+            "111111111111",
+            "--dest-account",
+            "222222222222",
+            "--vault",
+            "test-vault",
+            "--workers",
+            "10",
+        ]
+    )
 
     assert args.workers == 10
 
@@ -183,13 +235,19 @@ def test_parser_copy_command_with_workers() -> None:
 def test_parser_copy_command_with_max_runtime() -> None:
     """Test copy command with max-runtime-minutes flag."""
     parser = create_parser()
-    args = parser.parse_args([
-        "copy",
-        "--source-account", "111111111111",
-        "--dest-account", "222222222222",
-        "--vault", "test-vault",
-        "--max-runtime-minutes", "120",
-    ])
+    args = parser.parse_args(
+        [
+            "copy",
+            "--source-account",
+            "111111111111",
+            "--dest-account",
+            "222222222222",
+            "--vault",
+            "test-vault",
+            "--max-runtime-minutes",
+            "120",
+        ]
+    )
 
     assert args.max_runtime_minutes == 120
 
@@ -200,23 +258,35 @@ def test_parser_copy_command_workers_validation() -> None:
 
     # Test zero workers (invalid)
     with pytest.raises(SystemExit):
-        parser.parse_args([
-            "copy",
-            "--source-account", "111111111111",
-            "--dest-account", "222222222222",
-            "--vault", "test-vault",
-            "--workers", "0",
-        ])
+        parser.parse_args(
+            [
+                "copy",
+                "--source-account",
+                "111111111111",
+                "--dest-account",
+                "222222222222",
+                "--vault",
+                "test-vault",
+                "--workers",
+                "0",
+            ]
+        )
 
     # Test negative workers (invalid)
     with pytest.raises(SystemExit):
-        parser.parse_args([
-            "copy",
-            "--source-account", "111111111111",
-            "--dest-account", "222222222222",
-            "--vault", "test-vault",
-            "--workers", "-5",
-        ])
+        parser.parse_args(
+            [
+                "copy",
+                "--source-account",
+                "111111111111",
+                "--dest-account",
+                "222222222222",
+                "--vault",
+                "test-vault",
+                "--workers",
+                "-5",
+            ]
+        )
 
 
 def test_parser_copy_command_max_runtime_validation() -> None:
@@ -225,34 +295,52 @@ def test_parser_copy_command_max_runtime_validation() -> None:
 
     # Test zero minutes (invalid)
     with pytest.raises(SystemExit):
-        parser.parse_args([
-            "copy",
-            "--source-account", "111111111111",
-            "--dest-account", "222222222222",
-            "--vault", "test-vault",
-            "--max-runtime-minutes", "0",
-        ])
+        parser.parse_args(
+            [
+                "copy",
+                "--source-account",
+                "111111111111",
+                "--dest-account",
+                "222222222222",
+                "--vault",
+                "test-vault",
+                "--max-runtime-minutes",
+                "0",
+            ]
+        )
 
     # Test negative minutes (invalid)
     with pytest.raises(SystemExit):
-        parser.parse_args([
-            "copy",
-            "--source-account", "111111111111",
-            "--dest-account", "222222222222",
-            "--vault", "test-vault",
-            "--max-runtime-minutes", "-30",
-        ])
+        parser.parse_args(
+            [
+                "copy",
+                "--source-account",
+                "111111111111",
+                "--dest-account",
+                "222222222222",
+                "--vault",
+                "test-vault",
+                "--max-runtime-minutes",
+                "-30",
+            ]
+        )
 
 
 def test_parser_copy_command_with_summary_output() -> None:
     """Test copy command with summary output flag."""
     parser = create_parser()
-    args = parser.parse_args([
-        "copy",
-        "--source-account", "111111111111",
-        "--dest-account", "222222222222",
-        "--vault", "test-vault",
-        "--summary-output", "/path/to/summary.json",
-    ])
+    args = parser.parse_args(
+        [
+            "copy",
+            "--source-account",
+            "111111111111",
+            "--dest-account",
+            "222222222222",
+            "--vault",
+            "test-vault",
+            "--summary-output",
+            "/path/to/summary.json",
+        ]
+    )
 
     assert args.summary_output == "/path/to/summary.json"

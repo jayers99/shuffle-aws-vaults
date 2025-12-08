@@ -8,7 +8,6 @@ for comparison and filtering operations.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
@@ -51,7 +50,7 @@ class RecoveryPoint:
     resource_arn: str
     resource_type: str
     creation_date: datetime
-    completion_date: Optional[datetime]
+    completion_date: datetime | None
     status: str
     size_bytes: int
     backup_job_id: str
@@ -73,7 +72,7 @@ class RecoveryPoint:
         """
         return self.is_completed() and self.completion_date is not None
 
-    def age_days(self, reference_date: Optional[datetime] = None) -> int:
+    def age_days(self, reference_date: datetime | None = None) -> int:
         """Calculate age of recovery point in days.
 
         Args:
@@ -94,7 +93,7 @@ class RecoveryPoint:
         """
         return round(self.size_bytes / (1024**3), 2)
 
-    def get_metadata(self, key: str, default: Optional[str] = None) -> Optional[str]:
+    def get_metadata(self, key: str, default: str | None = None) -> str | None:
         """Get a specific metadata value.
 
         Args:

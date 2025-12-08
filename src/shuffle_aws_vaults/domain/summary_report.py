@@ -159,7 +159,9 @@ class SummaryReport:
             "start_time": self.start_time.isoformat(),
             "end_time": self.end_time.isoformat(),
             "success_rate": round(self.success_rate, 2),
-            "throughput_per_hour": round(self.throughput_per_hour, 2) if self.throughput_per_hour is not None else None,
+            "throughput_per_hour": (
+                round(self.throughput_per_hour, 2) if self.throughput_per_hour is not None else None
+            ),
             "failures": [f.to_dict() for f in self.failures],
         }
 
@@ -202,18 +204,24 @@ class SummaryReport:
             "",
             f"Success Rate:     {self.success_rate:.1f}%",
             f"Duration:         {self.format_duration()}",
-            f"Throughput:       {self.throughput_per_hour:.1f} items/hour" if self.throughput_per_hour is not None else "Throughput:       N/A (duration too short)",
+            (
+                f"Throughput:       {self.throughput_per_hour:.1f} items/hour"
+                if self.throughput_per_hour is not None
+                else "Throughput:       N/A (duration too short)"
+            ),
             "",
             f"Started:          {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}",
             f"Ended:            {self.end_time.strftime('%Y-%m-%d %H:%M:%S')}",
         ]
 
         if self.failures:
-            lines.extend([
-                "",
-                f"FAILURES ({len(self.failures)}):",
-                "-" * 60,
-            ])
+            lines.extend(
+                [
+                    "",
+                    f"FAILURES ({len(self.failures)}):",
+                    "-" * 60,
+                ]
+            )
             for i, failure in enumerate(self.failures, 1):
                 lines.append(f"{i}. {failure.recovery_point_arn}")
                 lines.append(f"   Error: {failure.error_message}")

@@ -8,7 +8,6 @@ Tracks the outcome of recovery point migration operations.
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 __version__ = "0.1.0"
 __author__ = "John Ayers"
@@ -58,10 +57,10 @@ class CopyOperation:
     source_vault_name: str
     dest_vault_name: str
     status: MigrationStatus = MigrationStatus.PENDING
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    error_message: Optional[str] = None
-    copy_job_id: Optional[str] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    error_message: str | None = None
+    copy_job_id: str | None = None
 
     def start(self, copy_job_id: str) -> None:
         """Mark operation as started.
@@ -98,7 +97,7 @@ class CopyOperation:
         self.completed_at = datetime.now()
         self.error_message = reason
 
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         """Calculate operation duration in seconds.
 
         Returns:
@@ -123,8 +122,8 @@ class MigrationBatch:
 
     batch_id: str
     operations: list[CopyOperation] = field(default_factory=list)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
     def add_operation(self, operation: CopyOperation) -> None:
         """Add a copy operation to the batch.

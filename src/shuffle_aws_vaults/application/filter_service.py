@@ -60,9 +60,7 @@ class FilterService:
 
         return included, excluded
 
-    def get_filter_summary(
-        self, recovery_points: list[RecoveryPoint]
-    ) -> dict[str, int | float]:
+    def get_filter_summary(self, recovery_points: list[RecoveryPoint]) -> dict[str, int | float]:
         """Get summary of filter results.
 
         Args:

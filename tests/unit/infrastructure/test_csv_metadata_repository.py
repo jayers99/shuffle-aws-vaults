@@ -28,8 +28,7 @@ def test_load_metadata_simple_csv(tmp_path: Path) -> None:
     assert "arn:aws:ec2:us-east-1:123456789012:volume/vol-1" in metadata
     assert metadata["arn:aws:ec2:us-east-1:123456789012:volume/vol-1"]["APMID"] == "APP001"
     assert (
-        metadata["arn:aws:ec2:us-east-1:123456789012:volume/vol-1"]["Environment"]
-        == "Production"
+        metadata["arn:aws:ec2:us-east-1:123456789012:volume/vol-1"]["Environment"] == "Production"
     )
 
 
@@ -37,7 +36,9 @@ def test_load_metadata_caches_result(tmp_path: Path) -> None:
     """Test that load_metadata caches the result."""
     # Arrange
     csv_file = tmp_path / "metadata.csv"
-    csv_file.write_text("resourceArn,APMID\narn:aws:ec2:us-east-1:123456789012:volume/vol-1,APP001\n")
+    csv_file.write_text(
+        "resourceArn,APMID\narn:aws:ec2:us-east-1:123456789012:volume/vol-1,APP001\n"
+    )
 
     repo = CSVMetadataRepository(str(csv_file))
 
@@ -62,9 +63,7 @@ def test_get_metadata_for_resource(tmp_path: Path) -> None:
     repo = CSVMetadataRepository(str(csv_file))
 
     # Act
-    metadata = repo.get_metadata_for_resource(
-        "arn:aws:ec2:us-east-1:123456789012:volume/vol-1"
-    )
+    metadata = repo.get_metadata_for_resource("arn:aws:ec2:us-east-1:123456789012:volume/vol-1")
 
     # Assert
     assert metadata is not None
@@ -75,7 +74,9 @@ def test_get_metadata_for_missing_resource(tmp_path: Path) -> None:
     """Test getting metadata for a resource not in CSV."""
     # Arrange
     csv_file = tmp_path / "metadata.csv"
-    csv_file.write_text("resourceArn,APMID\narn:aws:ec2:us-east-1:123456789012:volume/vol-1,APP001\n")
+    csv_file.write_text(
+        "resourceArn,APMID\narn:aws:ec2:us-east-1:123456789012:volume/vol-1,APP001\n"
+    )
 
     repo = CSVMetadataRepository(str(csv_file))
 
@@ -190,7 +191,9 @@ def test_is_loaded_property(tmp_path: Path) -> None:
     """Test is_loaded property."""
     # Arrange
     csv_file = tmp_path / "metadata.csv"
-    csv_file.write_text("resourceArn,APMID\narn:aws:ec2:us-east-1:123456789012:volume/vol-1,APP001\n")
+    csv_file.write_text(
+        "resourceArn,APMID\narn:aws:ec2:us-east-1:123456789012:volume/vol-1,APP001\n"
+    )
 
     repo = CSVMetadataRepository(str(csv_file))
 
@@ -273,7 +276,9 @@ def test_progress_callback_not_required(tmp_path: Path) -> None:
     """Test that progress callback is optional."""
     # Arrange
     csv_file = tmp_path / "metadata.csv"
-    csv_file.write_text("resourceArn,APMID\narn:aws:ec2:us-east-1:123456789012:volume/vol-1,APP001\n")
+    csv_file.write_text(
+        "resourceArn,APMID\narn:aws:ec2:us-east-1:123456789012:volume/vol-1,APP001\n"
+    )
 
     # Act - no progress_callback provided
     repo = CSVMetadataRepository(str(csv_file))

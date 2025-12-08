@@ -182,7 +182,9 @@ def test_get_enrichment_stats() -> None:
     assert stats["missing_count"] == 1
 
 
-def test_enrich_recovery_point_logs_warning_for_missing_metadata(caplog: pytest.LogCaptureFixture) -> None:
+def test_enrich_recovery_point_logs_warning_for_missing_metadata(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Test that a warning is logged when metadata is missing."""
     # Arrange
     rp = RecoveryPoint(

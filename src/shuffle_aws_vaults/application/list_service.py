@@ -88,9 +88,7 @@ class ListService:
         vaults = self.backup_repo.list_vaults(region)
         return sorted(vaults, key=lambda v: v.name)
 
-    def list_vault_recovery_points(
-        self, vault_name: str, region: str
-    ) -> list[RecoveryPoint]:
+    def list_vault_recovery_points(self, vault_name: str, region: str) -> list[RecoveryPoint]:
         """List all recovery points in a specific vault.
 
         Args:

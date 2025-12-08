@@ -7,7 +7,6 @@ Provides business logic for filtering recovery points based on various criteria.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from shuffle_aws_vaults.domain.recovery_point import RecoveryPoint
 

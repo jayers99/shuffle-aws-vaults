@@ -9,7 +9,7 @@ with filtering and progress tracking capabilities.
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import NoReturn
 
 from shuffle_aws_vaults.application.list_service import ListService
@@ -71,7 +71,8 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "-v", "--verbose",
+        "-v",
+        "--verbose",
         action="store_true",
         help="Enable verbose output",
     )
@@ -266,9 +267,7 @@ def cmd_list(args: argparse.Namespace) -> int:
         if args.vault:
             # List recovery points for specific vault
             logger.info(f"Listing recovery points in vault: {args.vault}")
-            recovery_points = list_service.list_vault_recovery_points(
-                args.vault, args.region
-            )
+            recovery_points = list_service.list_vault_recovery_points(args.vault, args.region)
 
             # Enrich with CSV metadata if provided
             if args.metadata_csv:
@@ -311,7 +310,7 @@ def cmd_list(args: argparse.Namespace) -> int:
                     print(f"  Status: {rp.status}")
                     print(f"  Size: {rp.size_gb()} GB")
                     if rp.metadata:
-                        print(f"  Metadata:")
+                        print("  Metadata:")
                         for key, value in rp.metadata.items():
                             print(f"    {key}: {value}")
                     print()
@@ -364,6 +363,7 @@ def cmd_list(args: argparse.Namespace) -> int:
         logger.error(f"Error listing vaults: {e}")
         if args.verbose:
             import traceback
+
             traceback.print_exc()
         return 1
 
@@ -550,7 +550,7 @@ def cmd_copy(args: argparse.Namespace) -> int:
     shutdown_coordinator.register_shutdown_callback(save_state_on_shutdown)
     shutdown_coordinator.setup_signal_handlers()
 
-    logger.info(f"Copying recovery points:")
+    logger.info("Copying recovery points:")
     logger.info(f"  Source: {args.source_account}")
     logger.info(f"  Destination: {args.dest_account}")
     logger.info(f"  Vault: {args.vault}")
@@ -622,7 +622,11 @@ def cmd_copy(args: argparse.Namespace) -> int:
         # Apply APMID filters if specified
         if args.allowed_apmids or args.excluded_apmids:
             from shuffle_aws_vaults.application.filter_service import FilterService
-            from shuffle_aws_vaults.domain.filter_rule import FilterCriteria, FilterRule, FilterRuleSet
+            from shuffle_aws_vaults.domain.filter_rule import (
+                FilterCriteria,
+                FilterRule,
+                FilterRuleSet,
+            )
 
             rules_list = []
 
@@ -720,7 +724,7 @@ def cmd_copy(args: argparse.Namespace) -> int:
         progress_tracker.finish()
 
         # Generate summary report
-        end_time = datetime.now(timezone.utc)
+        end_time = datetime.now(UTC)
         duration = end_time.timestamp() - progress_tracker.start_time
 
         # Collect failure details
@@ -741,7 +745,7 @@ def cmd_copy(args: argparse.Namespace) -> int:
             skipped=skipped_count,
             in_progress=in_progress_count,
             duration_seconds=duration,
-            start_time=datetime.fromtimestamp(progress_tracker.start_time, tz=timezone.utc),
+            start_time=datetime.fromtimestamp(progress_tracker.start_time, tz=UTC),
             end_time=end_time,
             failures=failures,
         )
@@ -766,7 +770,10 @@ def cmd_copy(args: argparse.Namespace) -> int:
         # Exit code 1 if failures occurred
         if completed_count == len(batch.operations):
             return 0
-        elif progress_tracker.is_runtime_limit_exceeded() or shutdown_coordinator.is_shutdown_requested():
+        elif (
+            progress_tracker.is_runtime_limit_exceeded()
+            or shutdown_coordinator.is_shutdown_requested()
+        ):
             logger.info("Copy operation incomplete - state saved for resume")
             return 2
         else:
@@ -798,7 +805,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     Returns:
         Exit code (0 for success)
     """
-    print(f"Verifying migration:")
+    print("Verifying migration:")
     print(f"  Source: {args.source_account}")
     print(f"  Destination: {args.dest_account}")
     # TODO: Implement actual verification logic
