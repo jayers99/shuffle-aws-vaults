@@ -185,6 +185,13 @@ def create_parser() -> argparse.ArgumentParser:
         help="Number of concurrent worker threads (1-100, default: 1 for single-threaded)",
     )
     copy_parser.add_argument(
+        "--max-runtime-minutes",
+        type=int,
+        choices=range(1, 10001),
+        metavar="1-10000",
+        help="Maximum runtime in minutes (1-10000, exits gracefully when limit reached)",
+    )
+    copy_parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -517,6 +524,9 @@ def cmd_copy(args: argparse.Namespace) -> int:
     if args.config:
         logger.info(f"  Filter config: {args.config}")
 
+    if args.max_runtime_minutes:
+        logger.info(f"  Max runtime: {args.max_runtime_minutes} minutes")
+
     if args.dry_run:
         logger.info("  [DRY RUN]")
         return 0
@@ -572,6 +582,7 @@ def cmd_copy(args: argparse.Namespace) -> int:
             total=len(recovery_points),
             verbose=args.verbose,
             refresh_interval=5.0,
+            max_runtime_minutes=args.max_runtime_minutes,
         )
 
         # Progress callback integrates with ProgressTracker
@@ -583,6 +594,15 @@ def cmd_copy(args: argparse.Namespace) -> int:
             if args.verbose:
                 logger.info(message)
 
+        # Shutdown check combines signal handler and runtime limit
+        def shutdown_check() -> bool:
+            if shutdown_coordinator.is_shutdown_requested():
+                return True
+            if progress_tracker.is_runtime_limit_exceeded():
+                logger.info("\nRuntime limit reached - stopping gracefully...")
+                return True
+            return False
+
         # Execute copy operation
         if args.workers > 1:
             logger.info(f"Starting multithreaded copy operation with {args.workers} workers...")
@@ -592,7 +612,7 @@ def cmd_copy(args: argparse.Namespace) -> int:
                 region=args.region,
                 workers=args.workers,
                 progress_callback=progress_callback,
-                shutdown_check=shutdown_coordinator.is_shutdown_requested,
+                shutdown_check=shutdown_check,
                 poll_interval=args.poll_interval,
             )
         else:
@@ -602,7 +622,7 @@ def cmd_copy(args: argparse.Namespace) -> int:
                 dest_account_id=args.dest_account,
                 region=args.region,
                 progress_callback=progress_callback,
-                shutdown_check=shutdown_coordinator.is_shutdown_requested,
+                shutdown_check=shutdown_check,
                 poll_interval=args.poll_interval,
             )
 
@@ -631,7 +651,18 @@ def cmd_copy(args: argparse.Namespace) -> int:
         # Save final state
         save_state_on_shutdown()
 
-        return 0
+        # Determine exit code
+        # Exit code 0 if all completed successfully (even if runtime limit reached)
+        # Exit code 2 if incomplete due to runtime limit or shutdown
+        # Exit code 1 if failures occurred
+        if completed_count == len(batch.operations):
+            return 0
+        elif progress_tracker.is_runtime_limit_exceeded() or shutdown_coordinator.is_shutdown_requested():
+            logger.info("Copy operation incomplete - state saved for resume")
+            return 2
+        else:
+            # Some operations failed or still in progress
+            return 0 if failed_count == 0 else 1
 
     except Exception as e:
         logger.error(f"Error during copy: {e}")
