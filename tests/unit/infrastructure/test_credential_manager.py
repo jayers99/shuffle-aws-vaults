@@ -201,3 +201,131 @@ def test_wait_for_user_refresh_keyboard_interrupt() -> None:
     with patch("builtins.input", side_effect=KeyboardInterrupt()):
         with pytest.raises(SystemExit):
             manager._wait_for_user_refresh()
+
+
+def test_thread_safe_get_session() -> None:
+    """Test that get_session is thread-safe."""
+    import threading
+
+    manager = CredentialManager()
+    sessions = []
+    errors = []
+
+    def get_session_thread():
+        try:
+            session = manager.get_session("us-east-1")
+            sessions.append(session)
+        except Exception as e:
+            errors.append(e)
+
+    # Create multiple threads trying to get session simultaneously
+    threads = [threading.Thread(target=get_session_thread) for _ in range(10)]
+
+    for thread in threads:
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
+    # No errors should have occurred
+    assert len(errors) == 0
+
+    # All threads should have gotten the same session
+    assert len(sessions) == 10
+    assert all(s is sessions[0] for s in sessions)
+
+    # Only one session should exist
+    assert len(manager._sessions) == 1
+
+
+def test_thread_safe_clear_sessions() -> None:
+    """Test that clear_sessions is thread-safe."""
+    import threading
+    import time
+
+    manager = CredentialManager()
+
+    # Create some sessions
+    manager.get_session("us-east-1")
+    manager.get_session("us-west-2")
+
+    errors = []
+
+    def clear_and_get():
+        try:
+            manager.clear_sessions()
+            time.sleep(0.001)  # Small delay
+            manager.get_session("us-east-1")
+        except Exception as e:
+            errors.append(e)
+
+    # Create multiple threads clearing and getting sessions
+    threads = [threading.Thread(target=clear_and_get) for _ in range(5)]
+
+    for thread in threads:
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
+    # No errors should have occurred
+    assert len(errors) == 0
+
+
+def test_thread_safe_credential_refresh() -> None:
+    """Test that credential refresh pauses all workers correctly."""
+    import threading
+    import time
+
+    manager = CredentialManager()
+
+    refresh_count = 0
+    refresh_lock = threading.Lock()
+    worker_calls = []
+    errors = []
+
+    error = ClientError(
+        {"Error": {"Code": "ExpiredToken", "Message": "Token expired"}},
+        "operation",
+    )
+
+    def mock_operation():
+        """Simulates an operation that might hit credential errors."""
+        nonlocal refresh_count
+        with refresh_lock:
+            # First call fails, second succeeds
+            if refresh_count == 0:
+                refresh_count += 1
+                raise error
+        return "success"
+
+    @manager.with_retry
+    def wrapped_operation():
+        return mock_operation()
+
+    def worker():
+        try:
+            result = wrapped_operation()
+            worker_calls.append(result)
+        except Exception as e:
+            errors.append(e)
+
+    # Create multiple worker threads
+    threads = [threading.Thread(target=worker) for _ in range(3)]
+
+    for thread in threads:
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
+    # All workers should have succeeded after refresh
+    assert len(worker_calls) == 3
+    assert all(result == "success" for result in worker_calls)
+
+    # No uncaught errors
+    assert len(errors) == 0
+
+    # Sessions should have been cleared and recreated
+    # Only one refresh should have occurred (first worker triggers it, others wait)
+    assert refresh_count == 1
