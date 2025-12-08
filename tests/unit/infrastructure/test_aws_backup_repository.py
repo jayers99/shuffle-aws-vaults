@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from unittest.mock import Mock, MagicMock, patch
 
 import pytest
+from botocore.exceptions import ClientError
 
 from shuffle_aws_vaults.infrastructure.aws_backup_repository import AWSBackupRepository
 
@@ -244,3 +245,138 @@ def test_get_copy_job_status() -> None:
         # Assert
         assert status == "COMPLETED"
         mock_client.describe_copy_job.assert_called_once_with(CopyJobId="copy-job-123")
+
+
+def test_create_vault() -> None:
+    """Test creating a new vault."""
+    # Arrange
+    repo = AWSBackupRepository(account_id="123456789012")
+
+    # Mock boto3 client
+    mock_client = Mock()
+    mock_client.create_backup_vault.return_value = {
+        "BackupVaultArn": "arn:aws:backup:us-east-1:123456789012:backup-vault:new-vault"
+    }
+
+    with patch.object(repo, "_get_backup_client", return_value=mock_client):
+        # Act
+        vault = repo.create_vault("new-vault", "us-east-1")
+
+        # Assert
+        assert vault.name == "new-vault"
+        assert vault.arn == "arn:aws:backup:us-east-1:123456789012:backup-vault:new-vault"
+        assert vault.region == "us-east-1"
+        assert vault.account_id == "123456789012"
+        mock_client.create_backup_vault.assert_called_once_with(BackupVaultName="new-vault")
+
+
+def test_create_vault_with_encryption() -> None:
+    """Test creating a vault with encryption key."""
+    # Arrange
+    repo = AWSBackupRepository(account_id="123456789012")
+    kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/test-key"
+
+    # Mock boto3 client
+    mock_client = Mock()
+    mock_client.create_backup_vault.return_value = {
+        "BackupVaultArn": "arn:aws:backup:us-east-1:123456789012:backup-vault:encrypted-vault"
+    }
+
+    with patch.object(repo, "_get_backup_client", return_value=mock_client):
+        # Act
+        vault = repo.create_vault("encrypted-vault", "us-east-1", encryption_key_arn=kms_key_arn)
+
+        # Assert
+        assert vault.name == "encrypted-vault"
+        assert vault.encryption_key_arn == kms_key_arn
+        mock_client.create_backup_vault.assert_called_once_with(
+            BackupVaultName="encrypted-vault",
+            EncryptionKeyArn=kms_key_arn,
+        )
+
+
+def test_create_vault_already_exists() -> None:
+    """Test creating a vault that already exists."""
+    # Arrange
+    repo = AWSBackupRepository(account_id="123456789012")
+
+    # Mock boto3 client
+    mock_client = Mock()
+    error_response = {"Error": {"Code": "AlreadyExistsException"}}
+    mock_client.create_backup_vault.side_effect = ClientError(error_response, "create_backup_vault")
+    mock_client.describe_backup_vault.return_value = {
+        "BackupVaultArn": "arn:aws:backup:us-east-1:123456789012:backup-vault:existing-vault",
+        "NumberOfRecoveryPoints": 10,
+    }
+
+    with patch.object(repo, "_get_backup_client", return_value=mock_client):
+        # Act
+        vault = repo.create_vault("existing-vault", "us-east-1")
+
+        # Assert
+        assert vault.name == "existing-vault"
+        assert vault.recovery_point_count == 10
+        mock_client.describe_backup_vault.assert_called_once_with(BackupVaultName="existing-vault")
+
+
+def test_get_vault_lock_configuration() -> None:
+    """Test getting vault lock configuration."""
+    # Arrange
+    repo = AWSBackupRepository(account_id="123456789012")
+
+    # Mock boto3 client
+    mock_client = Mock()
+    mock_client.describe_backup_vault.return_value = {
+        "MinRetentionDays": 90,
+        "MaxRetentionDays": 365,
+        "Locked": True,
+    }
+
+    with patch.object(repo, "_get_backup_client", return_value=mock_client):
+        # Act
+        config = repo.get_vault_lock_configuration("locked-vault", "us-east-1")
+
+        # Assert
+        assert config is not None
+        assert config["min_retention_days"] == 90
+        assert config["max_retention_days"] == 365
+        assert config["locked"] is True
+
+
+def test_get_vault_lock_configuration_no_lock() -> None:
+    """Test getting vault lock configuration when no lock exists."""
+    # Arrange
+    repo = AWSBackupRepository(account_id="123456789012")
+
+    # Mock boto3 client
+    mock_client = Mock()
+    mock_client.describe_backup_vault.return_value = {}
+
+    with patch.object(repo, "_get_backup_client", return_value=mock_client):
+        # Act
+        config = repo.get_vault_lock_configuration("no-lock-vault", "us-east-1")
+
+        # Assert
+        assert config is None
+
+
+def test_put_vault_lock_configuration() -> None:
+    """Test setting vault lock configuration."""
+    # Arrange
+    repo = AWSBackupRepository(account_id="123456789012")
+
+    # Mock boto3 client
+    mock_client = Mock()
+
+    with patch.object(repo, "_get_backup_client", return_value=mock_client):
+        # Act
+        repo.put_vault_lock_configuration(
+            "locked-vault", "us-east-1", min_retention_days=90, max_retention_days=365
+        )
+
+        # Assert
+        mock_client.put_backup_vault_lock_configuration.assert_called_once_with(
+            BackupVaultName="locked-vault",
+            MinRetentionDays=90,
+            MaxRetentionDays=365,
+        )

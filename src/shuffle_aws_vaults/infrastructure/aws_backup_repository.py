@@ -120,6 +120,53 @@ class AWSBackupRepository:
 
         return vaults
 
+    def create_vault(
+        self, vault_name: str, region: str, encryption_key_arn: str | None = None
+    ) -> Vault:
+        """Create a backup vault.
+
+        Args:
+            vault_name: Name for the new vault
+            region: AWS region
+            encryption_key_arn: Optional KMS key ARN for encryption
+
+        Returns:
+            Created Vault domain object
+        """
+        client = self._get_backup_client(region)
+
+        try:
+            params = {"BackupVaultName": vault_name}
+            if encryption_key_arn:
+                params["EncryptionKeyArn"] = encryption_key_arn
+
+            response = client.create_backup_vault(**params)
+
+            return Vault(
+                name=vault_name,
+                arn=response["BackupVaultArn"],
+                region=region,
+                account_id=self.account_id,
+                encryption_key_arn=encryption_key_arn,
+            )
+        except ClientError as e:
+            # Vault already exists is not an error - return existing vault info
+            if e.response["Error"]["Code"] == "AlreadyExistsException":
+                # Get vault details
+                try:
+                    desc_response = client.describe_backup_vault(BackupVaultName=vault_name)
+                    return Vault(
+                        name=vault_name,
+                        arn=desc_response["BackupVaultArn"],
+                        region=region,
+                        account_id=self.account_id,
+                        recovery_point_count=desc_response.get("NumberOfRecoveryPoints", 0),
+                        encryption_key_arn=desc_response.get("EncryptionKeyArn"),
+                    )
+                except ClientError:
+                    pass
+            raise RuntimeError(f"Failed to create vault {vault_name}: {e}") from e
+
     def list_recovery_points(self, vault_name: str, region: str) -> list[RecoveryPoint]:
         """List recovery points in a vault.
 
@@ -206,6 +253,65 @@ class AWSBackupRepository:
             return response["CopyJob"]["State"]
         except ClientError as e:
             raise RuntimeError(f"Failed to get copy job status: {e}") from e
+
+    def get_vault_lock_configuration(
+        self, vault_name: str, region: str
+    ) -> dict[str, int | bool] | None:
+        """Get vault lock configuration.
+
+        Args:
+            vault_name: Vault name
+            region: AWS region
+
+        Returns:
+            Dict with min_retention_days, max_retention_days, and locked status,
+            or None if no lock configuration exists
+        """
+        client = self._get_backup_client(region)
+
+        # Get vault lock configuration from describe_backup_vault
+        try:
+            response = client.describe_backup_vault(BackupVaultName=vault_name)
+            if "MinRetentionDays" in response or "MaxRetentionDays" in response:
+                return {
+                    "min_retention_days": response.get("MinRetentionDays"),
+                    "max_retention_days": response.get("MaxRetentionDays"),
+                    "locked": response.get("Locked", False),
+                }
+        except ClientError:
+            pass
+
+        return None
+
+    def put_vault_lock_configuration(
+        self,
+        vault_name: str,
+        region: str,
+        min_retention_days: int | None = None,
+        max_retention_days: int | None = None,
+    ) -> None:
+        """Set vault lock configuration.
+
+        Args:
+            vault_name: Vault name
+            region: AWS region
+            min_retention_days: Minimum retention days
+            max_retention_days: Maximum retention days
+        """
+        client = self._get_backup_client(region)
+
+        try:
+            params = {"BackupVaultName": vault_name}
+            if min_retention_days is not None:
+                params["MinRetentionDays"] = min_retention_days
+            if max_retention_days is not None:
+                params["MaxRetentionDays"] = max_retention_days
+
+            client.put_backup_vault_lock_configuration(**params)
+        except ClientError as e:
+            raise RuntimeError(
+                f"Failed to set vault lock configuration for {vault_name}: {e}"
+            ) from e
 
 
 if __name__ == "__main__":

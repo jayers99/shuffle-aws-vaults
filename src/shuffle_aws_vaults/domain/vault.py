@@ -38,6 +38,9 @@ class Vault:
         account_id: AWS account ID
         recovery_point_count: Number of recovery points in vault
         encryption_key_arn: KMS key ARN used for encryption (optional)
+        min_retention_days: Minimum retention period enforced by vault lock (optional)
+        max_retention_days: Maximum retention period enforced by vault lock (optional)
+        locked: Whether vault lock is in locked (unchangeable) state
     """
 
     name: str
@@ -46,6 +49,9 @@ class Vault:
     account_id: str
     recovery_point_count: int = 0
     encryption_key_arn: Optional[str] = None
+    min_retention_days: Optional[int] = None
+    max_retention_days: Optional[int] = None
+    locked: bool = False
 
     def is_encrypted(self) -> bool:
         """Check if vault uses custom KMS encryption.
@@ -62,6 +68,14 @@ class Vault:
             True if recovery_point_count > 0
         """
         return self.recovery_point_count > 0
+
+    def has_compliance_lock(self) -> bool:
+        """Check if vault has compliance lock configuration.
+
+        Returns:
+            True if min or max retention days are configured
+        """
+        return self.min_retention_days is not None or self.max_retention_days is not None
 
     def matches_pattern(self, pattern: str) -> bool:
         """Check if vault name matches a pattern.
