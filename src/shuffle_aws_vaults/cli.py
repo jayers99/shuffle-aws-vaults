@@ -171,6 +171,11 @@ def create_parser() -> argparse.ArgumentParser:
         default=".shuffle-state.json",
         help="Path to state file (default: .shuffle-state.json)",
     )
+    copy_parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Skip IAM permission validation before starting copy",
+    )
 
     # verify command
     verify_parser = subparsers.add_parser(
@@ -426,6 +431,7 @@ def cmd_copy(args: argparse.Namespace) -> int:
     """
     from shuffle_aws_vaults.application.copy_service import CopyService
     from shuffle_aws_vaults.domain.state import CopyState
+    from shuffle_aws_vaults.infrastructure.permission_validator import PermissionValidator
     from shuffle_aws_vaults.infrastructure.signal_handler import ShutdownCoordinator
     from shuffle_aws_vaults.infrastructure.state_repository import StateRepository
 
@@ -502,6 +508,31 @@ def cmd_copy(args: argparse.Namespace) -> int:
         return 0
 
     try:
+        # Validate IAM permissions unless skipped
+        if not args.skip_validation:
+            logger.info("Validating IAM permissions...")
+            validator = PermissionValidator(
+                source_account_id=args.source_account,
+                dest_account_id=args.dest_account,
+            )
+
+            all_granted, results = validator.validate_permissions(args.region)
+
+            if not all_granted:
+                logger.error("Missing required IAM permissions:")
+                for result in results:
+                    if not result.granted:
+                        logger.error(f"  ✗ {result.permission}")
+                        if result.error_message and args.verbose:
+                            logger.error(f"    {result.error_message}")
+                    elif args.verbose:
+                        logger.info(f"  ✓ {result.permission}")
+
+                logger.error("\nPermission validation failed. Use --skip-validation to bypass.")
+                return 1
+
+            logger.info("✓ All required permissions validated")
+
         # Create repository and services
         backup_repo = AWSBackupRepository(account_id=args.source_account)
         list_service = ListService(backup_repo, dry_run=args.dry_run)
