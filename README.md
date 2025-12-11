@@ -2,6 +2,15 @@
 
 [CONTRIBUTING](CONTRIBUTING.md) · [COPILOT](COPILOT.md) · [.github Issue Templates](.github/ISSUE_TEMPLATE)
 
+## Table of Contents
+- Features
+- Architecture
+- Installation
+- Quick Start
+- Documentation
+- Contributor Guidance
+- Getting Help
+
 Production-ready CLI tool to migrate AWS Backup recovery points between accounts at scale (1M+ recovery points). Features include CSV metadata enrichment, state persistence with resume support, parallel processing, real-time progress tracking, and automatic error handling with retry logic.
 
 ## Features
@@ -105,6 +114,11 @@ shuffle-aws-vaults verify \
 🧭 **Quick Links**
 - Start contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Open an issue: [.github/ISSUE_TEMPLATE](.github/ISSUE_TEMPLATE)
+
+## Getting Help
+- Report a bug: use the [Bug Report template](.github/ISSUE_TEMPLATE/bug_report.md)
+- Request a feature: use the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md)
+- For AI-assisted changes: reference [COPILOT.md](COPILOT.md) in your issue/PR and include exact file paths and symbols.
 
 **Key Sections:**
 - [Command Reference](USER_GUIDE.md#command-reference) - All commands and options
