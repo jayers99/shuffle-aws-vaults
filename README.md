@@ -8,6 +8,7 @@
 [CONTRIBUTING](CONTRIBUTING.md) · [COPILOT](COPILOT.md) · [.github Issue Templates](.github/ISSUE_TEMPLATE)
 
 ## Table of Contents
+
 - Features
 - Architecture
 - Installation
@@ -113,19 +114,23 @@ shuffle-aws-vaults verify \
 📖 **[Complete User Guide](USER_GUIDE.md)** - Comprehensive guide with all features, examples, and troubleshooting
 
 🤖 **Contributor Guidance**
+
 - See [COPILOT.md](COPILOT.md) for AI-assisted development rules, coding standards, architecture boundaries, AWS/security practices, testing requirements, and commit/PR conventions.
 - When using Copilot Chat, include exact paths and symbols and ask for minimal diffs that follow `COPILOT.md`.
 
 🧭 **Quick Links**
+
 - Start contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Open an issue: [.github/ISSUE_TEMPLATE](.github/ISSUE_TEMPLATE)
 
 ## Getting Help
+
 - Report a bug: use the [Bug Report template](.github/ISSUE_TEMPLATE/bug_report.md)
 - Request a feature: use the [Feature Request template](.github/ISSUE_TEMPLATE/feature_request.md)
 - For AI-assisted changes: reference [COPILOT.md](COPILOT.md) in your issue/PR and include exact file paths and symbols.
 
 **Key Sections:**
+
 - [Command Reference](USER_GUIDE.md#command-reference) - All commands and options
 - [CSV Metadata Format](USER_GUIDE.md#csv-metadata-enrichment) - CSV file format and usage
 - [State Management & Resume](USER_GUIDE.md#state-management--resume) - Resuming interrupted operations
@@ -191,6 +196,7 @@ shuffle-aws-vaults copy \
 ```
 
 **Features:**
+
 - Graceful shutdown on SIGINT/SIGTERM
 - Automatic state file management
 - Resume from any interruption point
@@ -257,12 +263,14 @@ Includes: completion stats, success rate, throughput, duration, failure details
 ### Error Handling
 
 **Automatic Retry** - Exponential backoff for transient errors:
+
 - Throttling / Rate limiting
 - Service unavailable
 - Request timeouts
 - Internal errors
 
 **Credential Management** - Automatic refresh for expired tokens:
+
 - ExpiredToken
 - InvalidClientTokenId
 
@@ -299,6 +307,7 @@ pipenv run mypy src/
 ### Project Structure
 
 Every Python file includes:
+
 - Shebang (`#!/usr/bin/env python3`)
 - Module docstring
 - `__version__` and `__author__` metadata
@@ -310,6 +319,7 @@ Every Python file includes:
 The tool requires the following AWS permissions:
 
 **Source Account:**
+
 - `backup:ListBackupVaults`
 - `backup:ListRecoveryPointsByBackupVault`
 - `backup:DescribeRecoveryPoint`
@@ -317,23 +327,27 @@ The tool requires the following AWS permissions:
 - `backup:DescribeCopyJob`
 
 **Destination Account:**
+
 - `backup:CreateBackupVault`
 - `backup:PutBackupVaultAccessPolicy`
 
 ## Performance
 
 **Throughput Benchmarks:**
+
 - Single-threaded: ~50 items/hour
 - 10 workers: ~500 items/hour
 - 20 workers: ~900 items/hour
 - 30 workers: ~1,200 items/hour
 
 **Scale Targets:**
+
 - 10K items: ~2-3 hours (20 workers)
 - 100K items: ~20-30 hours (30 workers)
 - 1M items: ~200-300 hours (30 workers, use resume mode)
 
 **CSV Performance:**
+
 - 100K rows: < 2 seconds to load
 - 1M rows: < 20 seconds to load
 - Lookups: < 1ms (O(1) hash table)
@@ -368,6 +382,7 @@ pipenv run pytest tests/unit/domain/test_recovery_point.py -v
 ## Contributing
 
 This is a solo development project following trunk-based development:
+
 - Work in small vertical slices
 - Keep trunk always releasable
 - Tests first, then implementation, then refactor
