@@ -96,6 +96,10 @@ shuffle-aws-vaults verify \
 
 📖 **[Complete User Guide](USER_GUIDE.md)** - Comprehensive guide with all features, examples, and troubleshooting
 
+🤖 **Contributor Guidance**
+- See [COPILOT.md](COPILOT.md) for AI-assisted development rules, coding standards, architecture boundaries, AWS/security practices, testing requirements, and commit/PR conventions.
+- When using Copilot Chat, include exact paths and symbols and ask for minimal diffs that follow `COPILOT.md`.
+
 **Key Sections:**
 - [Command Reference](USER_GUIDE.md#command-reference) - All commands and options
 - [CSV Metadata Format](USER_GUIDE.md#csv-metadata-enrichment) - CSV file format and usage
