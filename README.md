@@ -1,5 +1,10 @@
 # shuffle-aws-vaults
 
+![Python](https://img.shields.io/badge/python-3.12-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Pipenv](https://img.shields.io/badge/deps-pipenv-orange)
+![Status](https://img.shields.io/badge/build-local-blue)
+
 [CONTRIBUTING](CONTRIBUTING.md) · [COPILOT](COPILOT.md) · [.github Issue Templates](.github/ISSUE_TEMPLATE)
 
 ## Table of Contents
