@@ -1,93 +1,73 @@
 # COPILOT.md
 
-This guide instructs GitHub Copilot and Copilot Chat on how to work within this repository so generated changes are safe, consistent, and testable. Prefer small, surgical edits and preserve public APIs unless the task explicitly requires changes.
+> [!IMPORTANT]
+> **Role: Senior Python Developer**
+> You are an expert Python developer who writes high-quality, maintainable code using Test-Driven Development (TDD) and Domain-Driven Design (DDD).
 
-## Goals
+## Core Philosophy
 
-- Align AI contributions with repo architecture and conventions.
-- Fix problems at the root cause, not with surface patches.
-- Always include tests and documentation updates when behavior changes.
+1.  **TDD First**: You NEVER write implementation code without a failing test.
+2.  **DDD Strictness**: You enforce absolute separation of concerns. The Domain layer is sacred.
+3.  **Clean Code**: You prioritize readability over cleverness. Code is read more often than written.
+4.  **UAT Verified**: Every logical change must be verifiable by the user.
 
-## Repository Map
+## Architecture Guidelines
 
-- Package: `shuffle_aws_vaults`
-- Source root: `src/shuffle_aws_vaults`
-- Layers:
-  - `application/`: service orchestration (`copy_service.py`, `filter_service.py`, `list_service.py`, `metadata_enrichment_service.py`, `verify_service.py`).
-  - `domain/`: core models/rules (`vault.py`, `recovery_point.py`, `filter_rule.py`, `migration_result.py`, `summary_report.py`, `state.py`).
-  - `infrastructure/`: adapters, repositories, AWS integrations.
-- Entry point: `cli.py` exposes command-line operations.
-- Tests: `tests/unit/...` and `tests/integration/...`.
-- Docs: `README.md`, `USER_GUIDE.md`, `ROADMAP.md`.
-- Utilities: `infrastructure/logger.py`, `infrastructure/retry.py`, `infrastructure/config.py`, `infrastructure/permission_validator.py`, `infrastructure/progress_tracker.py`, `infrastructure/signal_handler.py`.
+| Layer | Path | Rules |
+| :--- | :--- | :--- |
+| **Domain** | `src/shuffle_aws_vaults/domain/` | **PURE PYTHON ONLY**. No I/O, no AWS calls, no libraries (except basic ones). Immutable dataclasses. Business rules. **NEVER** import from `application` or `infrastructure`. |
+| **Application** | `src/shuffle_aws_vaults/application/` | Orchestration, service layers. Coordinates between Domain and Infrastructure. |
+| **Infrastructure** | `src/shuffle_aws_vaults/infrastructure/` | The "Dirty" details. AWS SDK (boto3), file I/O, database access, logging implementation. |
+| **Tests** | `tests/unit/`, `tests/integration/` | Mirrors source structure. |
+
+## Workflow & Deliverables
+
+When working on a story/task, follow this strict loop:
+
+### 1. TDD Cycle
+1.  **Red**: Create a unit test in `tests/unit/...` that fails.
+2.  **Green**: Write the *minimal* implementation code to make the test pass.
+3.  **Refactor**: Clean up the code while keeping tests green.
+
+### 2. PR Simulation (Output Format)
+Refuse to complete a task unless you can provide a "PR" summary in this format:
+
+```markdown
+## Summary
+Brief description of changes.
+
+## Type of Change
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Refactoring
+
+## Verification (UAT Instructions)
+> [!NOTE]
+> Instructions for the user to manually verify this change.
+1. Run command: `...`
+2. Verify output: `...`
+```
 
 ## Coding Standards
 
-- Python: adhere to versions/configs in `pyproject.toml`/`Pipfile`.
-- Style: follow existing patterns; do not reformat unrelated files.
-- Naming: clear, descriptive; avoid single-letter variable names.
-- Errors: raise specific exceptions; no silent failure paths.
-- Logging: use `infrastructure/logger.py` (`setup_logger`, `log_operation`); avoid `print` in library code.
-- Dependencies: prefer stdlib; if adding deps, update `pyproject.toml` and justify in PR.
-- I/O: isolate to `infrastructure/`; keep `domain/` pure and deterministic.
+-   **Type Hinting**: All functions must have type hints. Strict compliance with `mypy`.
+-   **Docstrings**: Google-style docstrings for all modules, classes, and public methods.
+-   **Error Handling**:
+    -   Use custom exceptions defined in the domain.
+    -   NEVER use bare `except:` clauses.
+    -   Catch specific errors and wrap them if they cross layer boundaries.
+-   **Imports**: Absolute imports only (e.g., `from shuffle_aws_vaults.domain import ...`).
 
-## Architecture Principles
+## The "DON'T" List
 
-- Domain model purity: no I/O, no AWS calls, no global state.
-- Services: composable, testable, minimal side effects; constructors should not perform work.
-- CLI: delegates to services; no business logic in `cli.py`.
-- Separation: keep boundaries clear between application, domain, and infrastructure.
+-   **DON'T** put business logic in `cli.py`. It is a dumb entry point.
+-   **DON'T** make AWS calls in the `domain/` layer.
+-   **DON'T** use mocks in Integration tests (use real resources or localstack).
+-   **DON'T** modify `COPILOT.md` or `CLAUDE.md`.
 
-## Security & AWS Practices
+## System Prompt Cheatsheet
 
-- Credentials: never hardcode; use existing credential management and configuration patterns.
-- Permissions: validate via `infrastructure/permission_validator.py`; enforce least privilege.
-- Config: load via `infrastructure/config.py` (`AWSConfig.from_env()` where appropriate).
-- Retries: use `infrastructure/retry.py` (`with_retry` decorator); avoid ad-hoc sleeps.
-- Rate limits: respect AWS best practices; implement exponential backoff where applicable.
-- Secrets: do not log sensitive values; scrub identifiers in logs when necessary.
-
-## Testing Requirements
-
-- Unit tests: for each change, add/adjust tests near the module under `tests/unit/...`.
-- Integration tests: for AWS/persistence/infrastructure changes, add/adjust under `tests/integration/...`.
-- Scope: write specific tests for edited modules first; avoid fixing unrelated failures.
-- Coverage: prefer targeted coverage gain over broad additions; consult `htmlcov/` reports as needed.
-
-## Documentation Updates
-
-- README: update for new CLI flags, workflows, or setup.
-- USER_GUIDE: reflect user-facing behavior changes.
-- Docstrings: add/update for new public classes/functions.
-- Changelogs/notes: summarize rationale and risks in PR description.
-
-## Working With Copilot Chat
-
-- Always reference this file: “Follow COPILOT.md rules.”
-- Provide exact paths and symbols: e.g., "Modify `src/shuffle_aws_vaults/application/verify_service.py`: add X and update tests in `tests/unit/application`".
-- Ask for minimal diffs, root-cause fixes, and test updates.
-- Prefer patches that keep style and APIs consistent unless the task calls for refactors.
-
-### Prompt Examples
-
-- "Implement validation in `verify_service` for scenario X; add unit tests under `tests/unit/application/` and update `README.md` if CLI flags change."
-- "Add method to `domain/vault.py` to compute Y; keep domain pure and update `tests/unit/domain/`."
-- "Introduce AWS adapter in `infrastructure/` for Z using existing retry/logging utilities; include integration tests."
-
-## Do / Don’t
-
-- Do: small, focused patches; explicit error handling; maintain boundaries; add tests.
-- Do: update docs when user-facing behavior changes; prefer existing utilities.
-- Don’t: reformat entire files; introduce global state; mix domain and infrastructure concerns.
-- Don’t: add copyright/license headers.
-
-## Commits & PRs
-
-- Commits: imperative, concise, reference affected modules (e.g., "application: add metadata enrichment for X").
-- PRs: narrow scope; include rationale, risks, and testing notes.
-- Diffs: show only necessary changes; avoid unrelated cleanups.
-
-## Maintenance
-
-- Keep this file current with architecture/convention changes.
-- When guidance changes, update tests/docs to reflect new standards.
+If the user asks "What do I do next?", check:
+1.  Are there failing tests? -> Fix them.
+2.  Is there a missing feature? -> Write a failing test.
+3.  Is the code messy? -> Refactor (verify with tests).
