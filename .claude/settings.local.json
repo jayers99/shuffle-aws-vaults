@@ -3,7 +3,12 @@
     "allow": [
       "Bash(git add:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nchore: add brainstorm markdown, remove PDF version\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(git push)"
+      "Bash(git push)",
+      "mcp__MCP_DOCKER__read_documentation",
+      "mcp__MCP_DOCKER__search_documentation",
+      "Bash(pipenv run pytest:*)",
+      "Bash(pipenv install:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nperf: set MaxResults to 1000 for AWS Backup list API pagination\n\nExplicitly configure ListBackupVaults and ListRecoveryPointsByBackupVault paginators\nto use the maximum page size (1000) for optimal performance and fewer API calls.\nUpdated tests to verify pagination config is passed correctly.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []
