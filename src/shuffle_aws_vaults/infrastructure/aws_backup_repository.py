@@ -94,7 +94,7 @@ class AWSBackupRepository:
             vaults = []
 
             paginator = client.get_paginator("list_backup_vaults")
-            for page in paginator.paginate():
+            for page in paginator.paginate(PaginationConfig={"PageSize": 1000}):
                 for vault_data in page.get("BackupVaultList", []):
                     vault = Vault(
                         name=vault_data["BackupVaultName"],
@@ -182,7 +182,10 @@ class AWSBackupRepository:
             recovery_points = []
 
             paginator = client.get_paginator("list_recovery_points_by_backup_vault")
-            for page in paginator.paginate(BackupVaultName=vault_name):
+            for page in paginator.paginate(
+                BackupVaultName=vault_name,
+                PaginationConfig={"PageSize": 1000},
+            ):
                 for rp_data in page.get("RecoveryPoints", []):
                     recovery_point = RecoveryPoint(
                         recovery_point_arn=rp_data["RecoveryPointArn"],

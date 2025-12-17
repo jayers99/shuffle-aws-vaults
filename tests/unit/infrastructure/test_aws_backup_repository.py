@@ -60,7 +60,7 @@ def test_list_vaults_with_pagination() -> None:
         assert vaults[2].recovery_point_count == 100
 
         mock_client.get_paginator.assert_called_once_with("list_backup_vaults")
-        mock_paginator.paginate.assert_called_once()
+        mock_paginator.paginate.assert_called_once_with(PaginationConfig={"PageSize": 1000})
 
 
 def test_list_recovery_points_with_pagination() -> None:
@@ -119,7 +119,10 @@ def test_list_recovery_points_with_pagination() -> None:
         assert recovery_points[1].resource_type == "RDS"
 
         mock_client.get_paginator.assert_called_once_with("list_recovery_points_by_backup_vault")
-        mock_paginator.paginate.assert_called_once_with(BackupVaultName="test-vault")
+        mock_paginator.paginate.assert_called_once_with(
+            BackupVaultName="test-vault",
+            PaginationConfig={"PageSize": 1000},
+        )
 
 
 def test_list_vaults_handles_missing_fields() -> None:
